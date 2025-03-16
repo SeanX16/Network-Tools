@@ -1,2 +1,2 @@
 ## Shadowrocket 
-.conf配置文件备份
+.conf 配置文件备份
