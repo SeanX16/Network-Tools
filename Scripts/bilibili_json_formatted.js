@@ -187,15 +187,13 @@ if (body) {
         
         // 1. 先确保没删除 vip_section_v2
         // 2. 修改 vip_section_v2 的按钮字段
-        if (v.data.vip_section_v2 && v.data.vip_section_v2.vip_section_revision) {
-          // 清空按钮文字
-          v.data.vip_section_v2.vip_section_revision.click_title = "";
-          // 清空跳转链接
-          v.data.vip_section_v2.vip_section_revision.button_link = "";
+        if (v.data.vip_section_v2) {
+          // 删除 vip_section_revision 字段，移除整个按钮
+          delete v.data.vip_section_v2.vip_section_revision;
           // 3. 同时把 vip_section_v2.url 也置空，以防整个条幅依旧可点
           //    （若你希望整个条幅仍然可点，则可以不清空这个字段）
           v.data.vip_section_v2.url = "";
-          
+
           v.data.vip_section_v2.type = 0;
           v.data.vip_section_v2.title = "";
           v.data.vip_section_v2.desc = "";
