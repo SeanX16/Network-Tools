@@ -183,7 +183,7 @@ if (body) {
         });
         // 删除 VIP 相关分区
         delete v.data.vip_section_v2;
-        delete v.data.vip_section;
+        //delete v.data.vip_section;
         // 清空 live_tip 和 answer
         if (v.data.hasOwnProperty("live_tip")) {
           v.data.live_tip = {};
