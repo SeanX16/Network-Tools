@@ -192,16 +192,24 @@ if (body) {
           v.data.vip_section_v2.vip_section_revision.click_title = "";
           // 清空跳转链接
           v.data.vip_section_v2.vip_section_revision.button_link = "";
+          // 3. 同时把 vip_section_v2.url 也置空，以防整个条幅依旧可点
+          //    （若你希望整个条幅仍然可点，则可以不清空这个字段）
+          v.data.vip_section_v2.url = "";
+          
+          v.data.vip_section_v2.type = 0;
+          v.data.vip_section_v2.title = "";
+          v.data.vip_section_v2.desc = "";
+
         }
 
         // 如果同时存在 v.data.vip_section，类似操作
-        if (v.data.vip_section) {
+        //if (v.data.vip_section) {
           // 根据抓包结构，可能要删除或清空 title / url
           // 这里示例把按钮链接清空
-          v.data.vip_section.url = "";
+        //  v.data.vip_section.url = "";
           // 如果有类似 button_title 字段，也可以清空
           // v.data.vip_section.xxx = "";
-        }
+        //}
 
 
         // 清空 live_tip 和 answer
