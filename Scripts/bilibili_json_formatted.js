@@ -145,6 +145,7 @@ if (body) {
         let v = JSON.parse(body),
           // 定义允许显示的项目 ID 集合
           /*
+            171, 172 -> 创作中心，稿件管理
             396 
             397 
             398 
@@ -166,10 +167,12 @@ if (body) {
           delete v.data.sections_v2[i].tip_icon;
           delete v.data.sections_v2[i].tip_title;
           // 如果标题为“创作中心”（两种写法），则删除 title 和 type 属性
+          /*
           if (v.data.sections_v2[i].title === "创作中心" || v.data.sections_v2[i].title === "創作中心") {
             delete v.data.sections_v2[i].title;
             delete v.data.sections_v2[i].type;
           }
+          */
         });
         // 删除 VIP 相关分区
         delete v.data.vip_section_v2;
