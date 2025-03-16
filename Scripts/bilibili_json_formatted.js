@@ -183,9 +183,13 @@ if (body) {
         });
         // 删除 VIP 相关分区
         //delete v.data.vip_section_v2;
-        //delete v.data.vip_section;
+        delete v.data.vip_section;
         //v.data.bubbles = null;
-        
+        if (v.data.vip_section_v2 && v.data.vip_section_v2.vip_section_revision) {
+          v.data.vip_section_v2.type = 0;
+          v.data.vip_section_v2.title = "";
+          v.data.vip_section_v2.desc = "";
+        }
         
         // 清空 live_tip 和 answer
         if (v.data.hasOwnProperty("live_tip")) {
