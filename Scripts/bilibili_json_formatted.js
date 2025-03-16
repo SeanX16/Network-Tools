@@ -190,26 +190,21 @@ if (body) {
         if (v.data.vip_section_v2 && v.data.vip_section_v2.vip_section_revision) {
           // 保存与背景、色调、LOGO等相关的字段
           let rev = v.data.vip_section_v2.vip_section_revision;
-          let newRev = {
-              text_color: rev.text_color,                // 文字颜色
-              img_night: rev.img_night,                  // 夜间背景图片
-              sub_text_color: rev.sub_text_color,        // 副标题颜色
-              vip_op_icons: rev.vip_op_icons,            // VIP图标（如果有）
-              img: rev.img,                              // 普通背景图片
-              module_background: rev.module_background,  // 背景模块
-              button_icon_period: rev.button_icon_period, // （保留或可删除，看效果）
-              version: rev.version,                      // 版本号
-              module_background_color: rev.module_background_color,    // 背景色（浅色/深色）
-              logo: rev.logo,                            // 条幅 LOGO
-              module_background_color_daily: rev.module_background_color_daily, // 每日背景色
-              main_text_color: rev.main_text_color,      // 主文案颜色
-              button_style: rev.button_style             // 按钮样式（可保留，但不会生效，因为下面没有按钮数据）
-          };
-          // 将 vip_section_revision 替换成重构后的版本，按钮相关的字段都被移除了
-          v.data.vip_section_v2.vip_section_revision = newRev;
-          //v.data.vip_section_v2.type = 0;
-          //v.data.vip_section_v2.title = "";
-          //v.data.vip_section_v2.desc = "";
+          // 删除所有与按钮显示相关的字段
+          delete rev.button_link;
+          delete rev.click_title;
+          delete rev.button_icon_period;
+          delete rev.button_background_color;
+          delete rev.button_icon_type;
+          delete rev.button_text_color;
+          delete rev.button_icon_id;
+          delete rev.button_icon;
+          delete rev.button_icon_times;
+          delete rev.button_style;
+
+          v.data.vip_section_v2.type = 0;
+          v.data.vip_section_v2.title = "";
+          v.data.vip_section_v2.desc = "";
 
         }
 
