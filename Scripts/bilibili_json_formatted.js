@@ -220,6 +220,10 @@ if (body) {
               night_dress_text: "#FFF8FC",
               night_no_dress_text: "#FFF8FC"
           };
+
+          v.data.vip_section_v2.type = 0;
+          v.data.vip_section_v2.title = "";
+          v.data.vip_section_v2.desc = "";
         }
       
       
