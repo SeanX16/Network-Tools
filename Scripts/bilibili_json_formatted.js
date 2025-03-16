@@ -153,14 +153,14 @@ if (body) {
 
           */
           //allowedIds = new Set([396, 397, 398, 399, 407, 410, 402, 404, 425, 426, 427, 428, 430, 432, 433, 434, 494, 495, 496, 497, 500, 501, 2830, 3072, 3084]);
-          allowedIds = new Set([396, 397, 398, 399, 407, 410, 402, 404, 425, 426, 427, 428, 430, 432, 433, 434, 494, 495, 496, 497, 500, 501, 2830, 3072, 3084]);
+          allowedIds = new Set([171, 172, 396, 397, 398, 399, 407, 410, 402, 404, 425, 426, 427, 428, 430, 432, 433, 434, 494, 495, 496, 497, 500, 501, 2830, 3072, 3084]);
         // 遍历每个分区
         v.data.sections_v2.forEach((t, i) => {
           // 过滤每个分区中的 items，只保留 allowedIds 中的项
           let a = t.items.filter(t => allowedIds.has(t.id));
           v.data.sections_v2[i].items = a;
           // 重置按钮为空对象，表示去除按钮
-          //v.data.sections_v2[i].button = {};
+          v.data.sections_v2[i].button = {};
           // 删除一些属性（如标题和提示图标）
           delete v.data.sections_v2[i].be_up_title;
           delete v.data.sections_v2[i].tip_icon;
