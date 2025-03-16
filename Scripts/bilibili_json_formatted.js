@@ -182,16 +182,15 @@ if (body) {
           */
         });
 
-        // 删除 VIP 相关分区
-        //delete v.data.vip_section_v2;
-        delete v.data.vip_section;
-
-        // 删除会员条幅上的动态推广文字
-        /* if (v.data.vip_section_v2 && v.data.vip_section_v2.vip_section_revision) {
+        // 大会员条幅处理         
+        delete v.data.vip_section;      // 删除 vip_section (我也不知道是什么，反正内容是推广，删了吧)
+        //delete v.data.vip_section_v2; // 保留 vip_section_v2，保留了条幅的深浅背景色和 “会员中心” 按钮
+          // 删除会员条幅上的动态推广文字
+        if (v.data.vip_section_v2 && v.data.vip_section_v2.vip_section_revision) {
           v.data.vip_section_v2.type = 0;
           v.data.vip_section_v2.title = "";
           v.data.vip_section_v2.desc = "";
-        } */
+        }
         
         // 清空 live_tip 和 answer
         if (v.data.hasOwnProperty("live_tip")) {
