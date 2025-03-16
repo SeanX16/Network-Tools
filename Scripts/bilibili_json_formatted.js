@@ -182,10 +182,39 @@ if (body) {
           */
         });
         // 删除 VIP 相关分区
-        delete v.data.vip_section_v2;
-        delete v.data.vip_section;
-        v.data.bubbles = null;
+        //delete v.data.vip_section_v2;
+        //delete v.data.vip_section;
+        //v.data.bubbles = null;
         
+        if (v.data.vip_section_v2 && v.data.vip_section_v2.vip_section_revision) {
+          let rev = v.data.vip_section_v2.vip_section_revision;
+          
+          // 手动设置条幅背景色为 "#FFD44E7D"（即 argb FFD44E7D）
+          rev.module_background_color = {
+              day_dress: "#FFD44E7D",
+              day_no_dress: "#FFD44E7D",
+              night_dress: "#FFD44E7D",
+              night_no_dress: "#FFD44E7D"
+          };
+          
+          rev.module_background_color_daily = {
+              NIGHT_DRESS_DARK: { value: "#FFD44E7D", alpha: 1 },
+              DAY_DRESS_LIGHT: { value: "#FFD44E7D", alpha: 1 },
+              NIGHT_N_DRESS: { value: "#FFD44E7D", alpha: 1 },
+              DAY_DRESS_DARK: { value: "#FFD44E7D", alpha: 1 },
+              DAY_N_DRESS: { value: "#FFD44E7D", alpha: 1 },
+              NIGHT_DRESS_LIGHT: { value: "#FFD44E7D", alpha: 1 }
+          };
+      
+          // 手动设置条幅文字颜色为 "#FFF1C5D5"（即 argb FFF1C5D5）
+          rev.text_color = {
+              night_no_dress_text: "#FFF1C5D5",
+              day_dress_text: "#FFF1C5D5",
+              day_no_dress_text: "#FFF1C5D5",
+              night_dress_text: "#FFF1C5D5"
+          };
+        }
+      
         
         // 清空 live_tip 和 answer
         if (v.data.hasOwnProperty("live_tip")) {
