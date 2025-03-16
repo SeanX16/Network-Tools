@@ -182,42 +182,11 @@ if (body) {
           */
         });
         // 删除 VIP 相关分区
-        //delete v.data.vip_section_v2;
-        //delete v.data.vip_section;
+        delete v.data.vip_section_v2;
+        delete v.data.vip_section;
+        v.data.bubbles = null;
         
-        // 1. 先确保没删除 vip_section_v2
-        // 2. 修改 vip_section_v2 的按钮字段
-        if (v.data.vip_section_v2 && v.data.vip_section_v2.vip_section_revision) {
-          // 保存与背景、色调、LOGO等相关的字段
-          let rev = v.data.vip_section_v2.vip_section_revision;
-          // 删除所有与按钮显示相关的字段
-          delete rev.button_link;
-          delete rev.click_title;
-          delete rev.button_icon_period;
-          delete rev.button_background_color;
-          delete rev.button_icon_type;
-          delete rev.button_text_color;
-          delete rev.button_icon_id;
-          delete rev.button_icon;
-          delete rev.button_icon_times;
-          delete rev.button_style;
-
-          v.data.vip_section_v2.type = 0;
-          v.data.vip_section_v2.title = "";
-          v.data.vip_section_v2.desc = "";
-
-        }
-
-        // 如果同时存在 v.data.vip_section，类似操作
-        //if (v.data.vip_section) {
-          // 根据抓包结构，可能要删除或清空 title / url
-          // 这里示例把按钮链接清空
-        //  v.data.vip_section.url = "";
-          // 如果有类似 button_title 字段，也可以清空
-          // v.data.vip_section.xxx = "";
-        //}
-
-
+        
         // 清空 live_tip 和 answer
         if (v.data.hasOwnProperty("live_tip")) {
           v.data.live_tip = {};
