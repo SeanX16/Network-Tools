@@ -183,50 +183,9 @@ if (body) {
         });
         // 删除 VIP 相关分区
         //delete v.data.vip_section_v2;
-        delete v.data.vip_section;
+        //delete v.data.vip_section;
         //v.data.bubbles = null;
         
-        if (v.data.vip_section_v2 && v.data.vip_section_v2.vip_section_revision) {
-          let rev = v.data.vip_section_v2.vip_section_revision;
-          
-          // 设置条幅背景颜色（模块背景）
-          rev.module_background_color = {
-              // 浅色模式（day_*）背景
-              day_dress: "#FF579A",
-              day_no_dress: "#FF579A",
-              // 深色模式（night_*）背景
-              night_dress: "#D24E7D",
-              night_no_dress: "#D24E7D"
-          };
-      
-          // 设置每日背景颜色，也就是每个具体主题下的背景颜色
-          rev.module_background_color_daily = {
-              // 深色模式相关
-              NIGHT_DRESS_DARK: { value: "#D24E7D", alpha: 1 },
-              NIGHT_N_DRESS: { value: "#D24E7D", alpha: 1 },
-              NIGHT_DRESS_LIGHT: { value: "#D24E7D", alpha: 1 },
-              // 浅色模式相关
-              DAY_DRESS_LIGHT: { value: "#FF579A", alpha: 1 },
-              DAY_DRESS_DARK: { value: "#FF579A", alpha: 1 },
-              DAY_N_DRESS: { value: "#FF579A", alpha: 1 }
-          };
-      
-          // 设置条幅文字颜色
-          rev.text_color = {
-              // 浅色模式文字
-              day_dress_text: "#FFF9FF",
-              day_no_dress_text: "#FFF9FF",
-              // 深色模式文字
-              night_dress_text: "#FFF8FC",
-              night_no_dress_text: "#FFF8FC"
-          };
-
-          v.data.vip_section_v2.type = 0;
-          v.data.vip_section_v2.title = "";
-          v.data.vip_section_v2.desc = "";
-        }
-      
-      
         
         // 清空 live_tip 和 answer
         if (v.data.hasOwnProperty("live_tip")) {
