@@ -2,6 +2,10 @@
 
 目前只有哔哩哔哩 iOS 端 App 的处理脚本。个人修改主要针对 `我的` 页面。
 
+`BilibiliAds_mixed-js.conf` 里只有 `我的` 页面和 `tab` 的处理替换为了我自己的js脚本
+
+`BilibiliAds_own-js.conf` 里所有 @ddgksf2013 的脚本全部替换为了我自己的js脚本
+
 ------------
 
 ### ID 和对应元素（由 Stream 软件在 iPhone 上抓包 JSON 整理得到）：
