@@ -101,7 +101,8 @@ if (body) {
           // 添加“直播”和“推荐”标签
           f.push(
             { id: 39, name: "直播", uri: "bilibili://live/home", tab_id: "直播tab", pos: 1 },
-            { id: 40, name: "推荐", uri: "bilibili://pegasus/promo", tab_id: "推荐tab", pos: 2, default_selected: 1 }
+            { id: 40, name: "推荐", uri: "bilibili://pegasus/promo", tab_id: "推荐tab", pos: 2, default_selected: 1 },
+            { id: 41, name: "热门", uri: "bilibili://pegasus/hottopic", tab_id: "hottopic", pos: 3 }
           );
           // 根据是否包含 "pgc/home" 决定添加哪种“番剧”标签
           if (JSON.stringify(h.data.tab).indexOf("pgc/home") === -1) {
@@ -110,8 +111,7 @@ if (body) {
             f.push({ id: 545, name: "番剧", uri: "bilibili://pgc/home", tab_id: "bangumi", pos: 4 });
           }
           // 添加“热门”和“影视”标签
-          f.push(
-            { id: 41, name: "热门", uri: "bilibili://pegasus/hottopic", tab_id: "hottopic", pos: 3 },
+          f.push(            
             { id: 151, name: "影视", uri: "bilibili://pgc/cinema-tab", tab_id: "film", pos: 5 }
           );
           h.data.tab = f;
