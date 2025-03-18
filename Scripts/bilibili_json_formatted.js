@@ -107,11 +107,11 @@ if (body) {
           if (JSON.stringify(h.data.tab).indexOf("pgc/home") === -1) {
             f.push({ id: 774, name: "番剧", uri: "bilibili://following/home_activity_tab/6544", tab_id: "bangumi", pos: 3 });
           } else {
-            f.push({ id: 545, name: "番剧", uri: "bilibili://pgc/home", tab_id: "bangumi", pos: 3 });
+            f.push({ id: 545, name: "番剧", uri: "bilibili://pgc/home", tab_id: "bangumi", pos: 4 });
           }
           // 添加“热门”和“影视”标签
           f.push(
-            { id: 41, name: "热门", uri: "bilibili://pegasus/hottopic", tab_id: "hottopic", pos: 4 },
+            { id: 41, name: "热门", uri: "bilibili://pegasus/hottopic", tab_id: "hottopic", pos: 3 },
             { id: 151, name: "影视", uri: "bilibili://pgc/cinema-tab", tab_id: "film", pos: 5 }
           );
           h.data.tab = f;
