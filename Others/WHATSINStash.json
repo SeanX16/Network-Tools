@@ -1,0 +1,623 @@
+{"name":"WHATSINStash","icons":
+[
+    {
+        "name": "$tash.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/%24tash.png"
+    },
+    {
+        "name": "adguard.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/adguard.png"
+    },
+    {
+        "name": "anthropic.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/anthropic.png"
+    },
+    {
+        "name": "apple.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/apple.png"
+    },
+    {
+        "name": "appleappstore.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/appleappstore.png"
+    },
+    {
+        "name": "applearcade.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applearcade.png"
+    },
+    {
+        "name": "applebooks.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applebooks.png"
+    },
+    {
+        "name": "appleclassic.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/appleclassic.png"
+    },
+    {
+        "name": "applefacetime.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applefacetime.png"
+    },
+    {
+        "name": "applegamecenter.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applegamecenter.png"
+    },
+    {
+        "name": "applehome.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applehome.png"
+    },
+    {
+        "name": "appleicloud.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/appleicloud.png"
+    },
+    {
+        "name": "appleitunesstore.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/appleitunesstore.png"
+    },
+    {
+        "name": "applemail.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applemail.png"
+    },
+    {
+        "name": "applemessages.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applemessages.png"
+    },
+    {
+        "name": "applemusic.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applemusic.png"
+    },
+    {
+        "name": "applenews.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applenews.png"
+    },
+    {
+        "name": "appleoriginal.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/appleoriginal.png"
+    },
+    {
+        "name": "applesafari.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applesafari.png"
+    },
+    {
+        "name": "applespringloaded.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applespringloaded.png"
+    },
+    {
+        "name": "applewallet.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applewallet.png"
+    },
+    {
+        "name": "appleweather.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/appleweather.png"
+    },
+    {
+        "name": "applewwdc23.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/applewwdc23.png"
+    },
+    {
+        "name": "atomlantiscloud.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/atomlantiscloud.png"
+    },
+    {
+        "name": "aws.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/aws.png"
+    },
+    {
+        "name": "azure.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/azure.png"
+    },
+    {
+        "name": "baidu.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/baidu.png"
+    },
+    {
+        "name": "betahub.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/betahub.png"
+    },
+    {
+        "name": "bigben.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/bigben.png"
+    },
+    {
+        "name": "bilibili.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/bilibili.png"
+    },
+    {
+        "name": "bilibilitv.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/bilibilitv.png"
+    },
+    {
+        "name": "bing.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/bing.png"
+    },
+    {
+        "name": "blinkload.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/blinkload.png"
+    },
+    {
+        "name": "blinkloadB.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/blinkloadB.png"
+    },
+    {
+        "name": "brandenburggate.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/brandenburggate.png"
+    },
+    {
+        "name": "categoryballoon.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categoryballoon.png"
+    },
+    {
+        "name": "categorybike.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorybike.png"
+    },
+    {
+        "name": "categorybook.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorybook.png"
+    },
+    {
+        "name": "categorybriefcase.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorybriefcase.png"
+    },
+    {
+        "name": "categorycalculator.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorycalculator.png"
+    },
+    {
+        "name": "categorycatalog.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorycatalog.png"
+    },
+    {
+        "name": "categoryfood.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categoryfood.png"
+    },
+    {
+        "name": "categoryglobe.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categoryglobe.png"
+    },
+    {
+        "name": "categorylifestyle.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorylifestyle.png"
+    },
+    {
+        "name": "categorymagazine.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorymagazine.png"
+    },
+    {
+        "name": "categorymedical.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorymedical.png"
+    },
+    {
+        "name": "categorymusic.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorymusic.png"
+    },
+    {
+        "name": "categorynavigation.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorynavigation.png"
+    },
+    {
+        "name": "categorynetworking.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorynetworking.png"
+    },
+    {
+        "name": "categorynews.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorynews.png"
+    },
+    {
+        "name": "categoryphoto.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categoryphoto.png"
+    },
+    {
+        "name": "categorypig.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorypig.png"
+    },
+    {
+        "name": "categorypolygon.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorypolygon.png"
+    },
+    {
+        "name": "categorypopcorn.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorypopcorn.png"
+    },
+    {
+        "name": "categoryproductivity.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categoryproductivity.png"
+    },
+    {
+        "name": "categoryresearch.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categoryresearch.png"
+    },
+    {
+        "name": "categoryshopping.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categoryshopping.png"
+    },
+    {
+        "name": "categorysports.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorysports.png"
+    },
+    {
+        "name": "categorytravel.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categorytravel.png"
+    },
+    {
+        "name": "categoryweather.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/categoryweather.png"
+    },
+    {
+        "name": "chiangkaishekmemorialhouse.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/chiangkaishekmemorialhouse.png"
+    },
+    {
+        "name": "christtheredeemer.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/christtheredeemer.png"
+    },
+    {
+        "name": "cisco.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/cisco.png"
+    },
+    {
+        "name": "cloudflare.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/cloudflare.png"
+    },
+    {
+        "name": "cntower.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/cntower.png"
+    },
+    {
+        "name": "colosseum.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/colosseum.png"
+    },
+    {
+        "name": "degyax1.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/degyax1.png"
+    },
+    {
+        "name": "degyax2.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/degyax2.png"
+    },
+    {
+        "name": "degyax3.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/degyax3.png"
+    },
+    {
+        "name": "degyax4QvtamaX.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/degyax4QvtamaX.png"
+    },
+    {
+        "name": "degyaxminimal4QvtamaX.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/degyaxminimal4QvtamaX.png"
+    },
+    {
+        "name": "disneyplus.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/disneyplus.png"
+    },
+    {
+        "name": "dlercloud.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/dlercloud.png"
+    },
+    {
+        "name": "dots.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/dots.png"
+    },
+    {
+        "name": "eiffeltower.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/eiffeltower.png"
+    },
+    {
+        "name": "fallback.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/fallback.png"
+    },
+    {
+        "name": "fastcloud.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/fastcloud.png"
+    },
+    {
+        "name": "fishchips.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/fishchips.png"
+    },
+    {
+        "name": "fishchips0.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/fishchips0.png"
+    },
+    {
+        "name": "fishchips1.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/fishchips1.png"
+    },
+    {
+        "name": "fishchips2.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/fishchips2.png"
+    },
+    {
+        "name": "fishport.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/fishport.png"
+    },
+    {
+        "name": "friestash.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/friestash.png"
+    },
+    {
+        "name": "gcp.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/gcp.png"
+    },
+    {
+        "name": "glados.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/glados.png"
+    },
+    {
+        "name": "google.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/google.png"
+    },
+    {
+        "name": "gyeongbokgungpalace.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/gyeongbokgungpalace.png"
+    },
+    {
+        "name": "hogwarts.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/hogwarts.png"
+    },
+    {
+        "name": "hulu.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/hulu.png"
+    },
+    {
+        "name": "iconset.json",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/iconset.json"
+    },
+    {
+        "name": "infiniport.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/infiniport.png"
+    },
+    {
+        "name": "ipinfo.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/ipinfo.png"
+    },
+    {
+        "name": "iqzone.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/iqzone.png"
+    },
+    {
+        "name": "iringo.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/iringo.png"
+    },
+    {
+        "name": "leaningtowerofpisa.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/leaningtowerofpisa.png"
+    },
+    {
+        "name": "linkedin.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/linkedin.png"
+    },
+    {
+        "name": "loadbalance.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/loadbalance.png"
+    },
+    {
+        "name": "londoneye.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/londoneye.png"
+    },
+    {
+        "name": "loon.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/loon.png"
+    },
+    {
+        "name": "magicschool.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/magicschool.png"
+    },
+    {
+        "name": "merlion.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/merlion.png"
+    },
+    {
+        "name": "meta.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/meta.png"
+    },
+    {
+        "name": "microsoft.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/microsoft.png"
+    },
+    {
+        "name": "nationalmonument.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/nationalmonument.png"
+    },
+    {
+        "name": "netflix.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/netflix.png"
+    },
+    {
+        "name": "obeliscodebuenosaires.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/obeliscodebuenosaires.png"
+    },
+    {
+        "name": "openai.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/openai.png"
+    },
+    {
+        "name": "openit.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/openit.png"
+    },
+    {
+        "name": "oracle.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/oracle.png"
+    },
+    {
+        "name": "petronastowers.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/petronastowers.png"
+    },
+    {
+        "name": "playstation.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/playstation.png"
+    },
+    {
+        "name": "primevideo.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/primevideo.png"
+    },
+    {
+        "name": "relay.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/relay.png"
+    },
+    {
+        "name": "riotgames.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/riotgames.png"
+    },
+    {
+        "name": "ruinsofsaintpauls.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/ruinsofsaintpauls.png"
+    },
+    {
+        "name": "saintbasilscathedral.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/saintbasilscathedral.png"
+    },
+    {
+        "name": "select.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/select.png"
+    },
+    {
+        "name": "skylines.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/skylines.png"
+    },
+    {
+        "name": "spotify.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/spotify.png"
+    },
+    {
+        "name": "stashflight.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/stashflight.png"
+    },
+    {
+        "name": "statueofliberty.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/statueofliberty.png"
+    },
+    {
+        "name": "stonehenge.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/stonehenge.png"
+    },
+    {
+        "name": "substore.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/substore.png"
+    },
+    {
+        "name": "sultanahmedmosque.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/sultanahmedmosque.png"
+    },
+    {
+        "name": "switch.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/switch.png"
+    },
+    {
+        "name": "sydneyoperahouse.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/sydneyoperahouse.png"
+    },
+    {
+        "name": "taipei101.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/taipei101.png"
+    },
+    {
+        "name": "tajmahal.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/tajmahal.png"
+    },
+    {
+        "name": "telegram.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/telegram.png"
+    },
+    {
+        "name": "tencent.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/tencent.png"
+    },
+    {
+        "name": "tencentcloud.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/tencentcloud.png"
+    },
+    {
+        "name": "texon.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/texon.png"
+    },
+    {
+        "name": "texonhead.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/texonhead.png"
+    },
+    {
+        "name": "texonslab.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/texonslab.png"
+    },
+    {
+        "name": "thefederalassembly.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/thefederalassembly.png"
+    },
+    {
+        "name": "thegreatwall.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/thegreatwall.png"
+    },
+    {
+        "name": "thewhitehouse.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/thewhitehouse.png"
+    },
+    {
+        "name": "threads.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/threads.png"
+    },
+    {
+        "name": "tiktok.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/tiktok.png"
+    },
+    {
+        "name": "tinder.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/tinder.png"
+    },
+    {
+        "name": "torii.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/torii.png"
+    },
+    {
+        "name": "twitch.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/twitch.png"
+    },
+    {
+        "name": "twitter.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/twitter.png"
+    },
+    {
+        "name": "urltest.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/urltest.png"
+    },
+    {
+        "name": "v2tun.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/v2tun.png"
+    },
+    {
+        "name": "warp.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/warp.png"
+    },
+    {
+        "name": "warpcomet.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/warpcomet.png"
+    },
+    {
+        "name": "wechat.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/wechat.png"
+    },
+    {
+        "name": "weibo.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/weibo.png"
+    },
+    {
+        "name": "whatsinstash.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/whatsinstash.png"
+    },
+    {
+        "name": "wireguard.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/wireguard.png"
+    },
+    {
+        "name": "x.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/x.png"
+    },
+    {
+        "name": "xbox.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/xbox.png"
+    },
+    {
+        "name": "youtube.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/youtube.png"
+    },
+    {
+        "name": "zhihu.png",
+        "url": "https://raw.githubusercontent.com/shindgewongxj/WHATSINStash/main/icon/zhihu.png"
+    }
+],"description":"WHATSINStash 图标集 @shindgewongxj"}
