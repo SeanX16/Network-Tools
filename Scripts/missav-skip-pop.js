@@ -4,42 +4,31 @@
   防止新标签页打开广告，从而实现点击直接播放视频。
 */
 
+// 只处理 HTML 响应
 let body = $response.body;
 if (body && /<\/body>/i.test(body)) {
-  // 记录注入成功到 QX 日志，并通过通知提示
-  console.log('[missav] 注入脚本成功：' + $request.url);
-  $notify('missav 注入成功', '', $request.url);
-  
-  // 定义要注入到页面内的脚本
-  const injection = `
+  // 在 </body> 前注入页面脚本
+  body = body.replace(/<\/body>/i, `
 <script>
-(function(){
-  // 拦截 window.open 调用，防止通过 JS 打开广告新标签页
+;(function(){
+  // 1) 拦截所有 window.open，阻止中转广告
   const _open = window.open;
   window.open = function(url, target, features) {
-    if (url && url.indexOf('/pop?url=') > -1) {
-      // 注意：此处的 console.log 属于页面上下文，会显示在 Safari 的开发者控制台中
-      console.log('【missav】广告跳转已阻止：' + url);
+    if (url.includes('/pop?url=')) {
+      console.log('missav 广告跳转已阻止:', url);
       return null;
     }
     return _open.call(window, url, target, features);
   };
-
-  // 捕获页面所有点击事件，防止用户直接点击 <a> 标签跳转到中转页
+  // 2) 捕获所有点击事件，阻止 <a> 弹窗
   document.addEventListener('click', function(e){
-    var el = e.target;
+    let el = e.target;
     while(el && el !== document) {
-      if (el.tagName === 'A' && el.href && el.href.indexOf('/pop?url=') > -1) {
+      if (el.tagName === 'A' && el.href.includes('/pop?url=')) {
         e.preventDefault();
-        try {
-          let urlObj = new URL(el.href);
-          let real = urlObj.searchParams.get('url');
-          if(real) {
-            location.href = decodeURIComponent(real);
-          }
-        } catch(err) {
-          console.error('missav 脚本错误：' + err);
-        }
+        // 如果需要，也可以直接跳到真实视频：
+        // let real = new URL(el.href).searchParams.get('url');
+        // real && (location.href = decodeURIComponent(real));
         return;
       }
       el = el.parentNode;
@@ -47,9 +36,6 @@ if (body && /<\/body>/i.test(body)) {
   }, true);
 })();
 </script>
-</body>`;
-  
-  // 将注入脚本插入到 </body> 之前
-  body = body.replace(/<\/body>/i, injection);
+</body>`);
 }
 $done({ body });
