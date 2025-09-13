@@ -1,0 +1,16 @@
+# NAME: Apple-Intelligence
+# AUTHOR: SeanX16
+# REPO: 
+# UPDATED: 
+# HOST: 0
+# HOST-KEYWORD: 0
+# HOST-SUFFIX: 5
+# IP-ASN: 0
+# IP-CIDR: 0
+# TOTAL: 5
+
+HOST-SUFFIX,gateway.icloud.com,OpenAI
+HOST-SUFFIX,gsas.apple.com,OpenAI
+HOST-SUFFIX,apple-relay.apple.com,OpenAI
+HOST-SUFFIX,api-glb-aapnela.smoot.apple.com,OpenAI
+HOST-SUFFIX,guzzoni.apple.com,OpenAI
