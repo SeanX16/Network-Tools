@@ -1,16 +1,49 @@
 # NAME: Apple-Intelligence
 # AUTHOR: SeanX16
-# REPO: 
-# UPDATED: 
+# REPO: https://github.com/SeanX16/Network-Tools
+# UPDATED: 2026-11-08
 # HOST: 0
 # HOST-KEYWORD: 0
-# HOST-SUFFIX: 5
+# HOST-SUFFIX: 38
 # IP-ASN: 0
 # IP-CIDR: 0
-# TOTAL: 5
+# TOTAL: 38
 
-HOST-SUFFIX,gateway.icloud.com,OpenAI
-HOST-SUFFIX,gsas.apple.com,OpenAI
-HOST-SUFFIX,apple-relay.apple.com,OpenAI
-HOST-SUFFIX,api-glb-aapnela.smoot.apple.com,OpenAI
 HOST-SUFFIX,guzzoni.apple.com,OpenAI
+HOST-SUFFIX,smoot.apple.com,OpenAI
+HOST-SUFFIX,apple-relay.cloudflare.com,OpenAI
+HOST-SUFFIX,apple-relay.fastly-edge.com,OpenAI
+HOST-SUFFIX,cp4.cloudflare.com,OpenAI
+HOST-SUFFIX,apple-relay.apple.com,OpenAI
+HOST-SUFFIX,api-siri-prod.apple.com,OpenAI
+HOST-SUFFIX,guzzoni-apple-com.v.aaplimg.com,OpenAI
+HOST-SUFFIX,guzzoni-smoot.v.aaplimg.com,OpenAI
+HOST-SUFFIX,apple-relay.akamaized.net,OpenAI
+HOST-SUFFIX,apple-relay.mask.apple-dns.net,OpenAI
+HOST-SUFFIX,gateway.icloud.com,OpenAI
+HOST-SUFFIX,mask-api.icloud.com,OpenAI
+HOST-SUFFIX,mask-h2.icloud.com,OpenAI
+HOST-SUFFIX,mask.icloud.com,OpenAI
+HOST-SUFFIX,mask-api.fe.apple-dns.net,OpenAI
+HOST-SUFFIX,mask-api.fe2.apple-dns.net,OpenAI
+HOST-SUFFIX,mask-t.apple-dns.net,OpenAI
+HOST-SUFFIX,mask.apple-dns.net,OpenAI
+HOST-SUFFIX,weatherkit.apple.com,OpenAI
+HOST-SUFFIX,weather-data.apple.com,OpenAI
+HOST-SUFFIX,gspe1-ssl.ls.apple.com,OpenAI
+HOST-SUFFIX,aapps.mzstatic.com,OpenAI
+HOST-SUFFIX,apps.mzstatic.com,OpenAI
+HOST-SUFFIX,apple-carry-relay.cloudflare.com,OpenAI
+HOST-SUFFIX,seed.siri.apple.com,OpenAI
+HOST-SUFFIX,probe.siri.apple.com,OpenAI
+HOST-SUFFIX,seed-sequoia.siri.apple.com,OpenAI
+HOST-SUFFIX,seed-swallow.siri.apple.com,OpenAI
+HOST-SUFFIX,probe.icloud.com,OpenAI
+HOST-SUFFIX,pong.icloud.com,OpenAI
+HOST-SUFFIX,metrics.icloud.com,OpenAI
+HOST-SUFFIX,mask-boot.icloud.com,OpenAI
+HOST-SUFFIX,mask-canary.icloud.com,OpenAI
+HOST-SUFFIX,doh.dns.apple.com,OpenAI
+HOST-SUFFIX,weather-data-origin.apple.com,OpenAI
+HOST-SUFFIX,gsas.apple.com,OpenAI
+HOST-SUFFIX,api-glb-aapnela.smoot.apple.com,OpenAI
