@@ -29,9 +29,11 @@ https://raw.githubusercontent.com/SeanX16/Network-Tools/main/Scripts/Xiaohongshu
 
 ## 手动查看和清除缓存
 
+KB 按缓存原始文本的 UTF-8 编码字节数计算，1 KB = 1024 字节，保留两位小数。它表示缓存文本大小，不代表图片/视频文件大小，也不等于 QX 底层数据库的实际磁盘占用；字符数保留原有 JavaScript 字符串长度统计口径。
+
 两个独立任务脚本：
 
-- [查看缓存](https://raw.githubusercontent.com/SeanX16/Network-Tools/main/Scripts/xhs-cache-view.js)：通知显示各项状态及字符数，完整内容输出到本次执行日志；只读。
+- [查看缓存](https://raw.githubusercontent.com/SeanX16/Network-Tools/main/Scripts/xhs-cache-view.js)：通知显示各项状态、字符数和 KB 大小，并显示合计；完整内容输出到本次执行日志；只读。
 - [清除缓存](https://raw.githubusercontent.com/SeanX16/Network-Tools/main/Scripts/xhs-cache-clear.js)：仅清除普通视频、图片/实况、评论实况、评论视频四项缓存，逐项读回确认结果；保留图片画质设置和其他脚本数据。
 
 进入 QX「设置 → 配置文件 → 编辑」，在已有的 `[task_local]` 段下添加下面两行；没有该段时才新建 `[task_local]`：
