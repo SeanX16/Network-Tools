@@ -3,7 +3,7 @@
 // 基线 blob：8b3e6927bc6ad6a8efb52e685284c683e09578d0
 // 修复：https://github.com/SeanX16/Network-Tools/blob/main/Scripts/xhs-hd-save.js
 // 修复基线 blob：2d264b506e2aa6ef513c976df46ed5bb21e8d8a0
-// 仅调整 v4 视频选流与缓存来源；其他原版逻辑保持不变。
+// 整合 v4 视频选流与静态图片原尺寸保存；其余功能沿用原版。
 
 // 小红书视频信息流：从抓包中确认兼容的 MP4 类型里选择画质最高的一份。
 const compatibleStreamTypes = {
@@ -149,12 +149,14 @@ if (url.includes("/note/imagefeed?") || url.includes("/note/feed?")) {
         if (item.hash_tag) {
           item.hash_tag = item.hash_tag.filter(tag => tag.type !== "interact_vote");
         }
+        // 逐条笔记、逐张图片处理，避免只增强第一条笔记。
+        if (Array.isArray(item.images_list)) {
+          item.images_list = imageEnhance(JSON.stringify(item.images_list));
+        }
       }
 
       const images_list = obj.data[0].note_list[0].images_list;
-      // 画质增强
-      obj.data[0].note_list[0].images_list = imageEnhance(JSON.stringify(images_list));
-      // 保存无水印信息
+      // 缓存实际返回给 App 的图片信息；实况视频数据仍保留原值。
       $.setdata(JSON.stringify(images_list), "fmz200.xiaohongshu.feed.rsp");
       console.log('已存储无水印信息♻️');
     }
@@ -485,34 +487,70 @@ if (url.includes("/api/sns/v1/interaction/comment/video/download?")) {
 
 $done({body: JSON.stringify(obj)});
 
-// 小红书画质增强：加载2K分辨率的图片
+// 静态图片默认请求平台原尺寸资源，不强制转换格式或设置固定尺寸。
 function imageEnhance(jsonStr) {
-  if (!jsonStr) {
-    console.error("jsonStr is undefined or null");
-    return [];
-  }
+  if (!jsonStr) return [];
 
-  const imageQuality = $.getdata("fmz200.xiaohongshu.imageQuality");
-  console.log(`Image Quality: ${imageQuality}`);
-  if (imageQuality === "original") { // 原始分辨率，PNG格式的图片，占用空间比较大
-    console.log("画质设置为-原始分辨率");
-    jsonStr = jsonStr.replace(/\?imageView2\/2[^&]*(?:&redImage\/frame\/0)/, "?imageView2/0/format/png&redImage/frame/0");
-  } else { // 高像素输出
-    console.log("画质设置为-高像素输出");
-    const regex1 = /imageView2\/2\/w\/\d+\/format/g;
-    jsonStr = jsonStr.replace(regex1, `imageView2/2/w/2160/format`);
-
-    const regex2 = /imageView2\/2\/h\/\d+\/format/g;
-    jsonStr = jsonStr.replace(regex2, `imageView2/2/h/2160/format`);
-  }
-  console.log('图片画质增强完成✅');
-
+  let images;
   try {
-    return JSON.parse(jsonStr);
-  } catch (e) {
-    console.error("JSON parsing error: ", e);
+    images = JSON.parse(jsonStr);
+  } catch (_) {
+    console.log("[小红书原图] 图片数据无法解析");
     return [];
   }
+  if (!Array.isArray(images)) return images;
+
+  // 显式设置其他画质值时，继续使用原版 2160 逻辑。
+  const quality = $.getdata("fmz200.xiaohongshu.imageQuality") || "original";
+  if (quality !== "original") return enhanceImages2160(images);
+
+  let changed = 0;
+  const result = images.map(image => {
+    // 实况沿用原版画质增强与保存流程，不改它的视频地址。
+    if (!image || typeof image !== "object" || Array.isArray(image) ||
+        image.live_photo_file_id || image.live_photo) {
+      return enhanceImages2160([image])[0];
+    }
+
+    // fileid 是资源路径，必须完整保留 notes_pre_post/ 等目录。
+    // 不接收 URL、查询参数或路径跳转；无法识别时回退原版处理。
+    const fileId = image.fileid;
+    if (typeof fileId !== "string" ||
+        !/^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]{16,}$/.test(fileId)) {
+      return enhanceImages2160([image])[0];
+    }
+
+    const originalUrl = "https://sns-img-bd.xhscdn.com/" + fileId;
+    image.url = originalUrl;
+    image.url_size_large = originalUrl;
+    image.original = originalUrl;
+    image.need_load_original_image = true;
+    if (typeof image.url_8k === "string") image.url_8k = originalUrl;
+    if (image.url_multi_level && typeof image.url_multi_level === "object" &&
+        !Array.isArray(image.url_multi_level)) {
+      for (const key of Object.keys(image.url_multi_level)) {
+        if (typeof image.url_multi_level[key] === "string") {
+          image.url_multi_level[key] = originalUrl;
+        }
+      }
+    }
+    if (image.hd_img && typeof image.hd_img === "object" &&
+        typeof image.hd_img.url === "string") {
+      image.hd_img.url = originalUrl;
+    }
+    changed++;
+    return image;
+  });
+  console.log("[小红书原图] 已切换 " + changed + "/" + images.length + " 张静态图片");
+  return result;
+}
+
+// 保留上游的高像素模式，供显式画质设置、实况和未知图片结构回退使用。
+function enhanceImages2160(images) {
+  let jsonStr = JSON.stringify(images);
+  jsonStr = jsonStr.replace(/imageView2\/2\/w\/\d+\/format/g, "imageView2/2/w/2160/format");
+  jsonStr = jsonStr.replace(/imageView2\/2\/h\/\d+\/format/g, "imageView2/2/h/2160/format");
+  return JSON.parse(jsonStr);
 }
 
 function replaceUrlContent(collectionA, collectionB) {
