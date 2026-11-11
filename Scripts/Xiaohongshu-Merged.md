@@ -27,6 +27,28 @@ https://raw.githubusercontent.com/SeanX16/Network-Tools/main/Scripts/Xiaohongshu
 - 保留原版缓存机制：每次非空视频信息流覆盖缓存，不新增跨页面缓存。
 - v4/v10 规则同时接受有查询参数和没有查询参数的 URL；补齐原规则使用但 hostname 缺少的 `so.xiaohongshu.com`。
 
+## 手动查看和清除缓存
+
+两个独立任务脚本：
+
+- [查看缓存](https://raw.githubusercontent.com/SeanX16/Network-Tools/main/Scripts/xhs-cache-view.js)：通知显示各项状态及字符数，完整内容输出到本次执行日志；只读。
+- [清除缓存](https://raw.githubusercontent.com/SeanX16/Network-Tools/main/Scripts/xhs-cache-clear.js)：仅清除普通视频、图片/实况、评论实况、评论视频四项缓存，逐项读回确认结果；保留图片画质设置和其他脚本数据。
+
+进入 QX「设置 → 配置文件 → 编辑」，在已有的 `[task_local]` 段下添加下面两行；没有该段时才新建 `[task_local]`：
+
+```ini
+0 0 * * * https://raw.githubusercontent.com/SeanX16/Network-Tools/main/Scripts/xhs-cache-view.js, tag=小红书缓存查看, enabled=false
+0 0 * * * https://raw.githubusercontent.com/SeanX16/Network-Tools/main/Scripts/xhs-cache-clear.js, tag=小红书缓存清除, enabled=false
+```
+
+两项均设置为 `enabled=false`，不自动定时执行。保存后进入「HTTP 请求／构造请求」列表，在对应任务上右滑，点击运行按钮手动执行；查看任务的执行日志可读到具体内容。若开启了 QX 通知权限，也会收到结果通知。不要为了手动运行而打开定时开关。
+
+清除前先退出小红书，避免重写脚本同时写回缓存。清除后重新打开笔记或视频，会重新生成缓存；已保存到相册的内容不受影响。原版和整合版共用这些缓存名称，所以清除会同时影响两者。评论相关项暂无缓存是正常情况。
+
+两份脚本本身没有网络请求；首次添加或更新脚本时，由 QX 从 GitHub 下载代码。查看脚本会把缓存中的笔记 ID 和带参数的视频链接写入本机执行日志，分享日志时可先隐去这些内容。
+
+已用模拟 QX 环境验证只读查看、四项定向删除、重复清除、读写失败反馈与其他数据保留；尚未在 iPhone 实机执行。
+
 ## 来源与更新
 
 - 原配置：https://github.com/fmz200/wool_scripts/blob/main/QuantumultX/rewrite/split/partX/Xiaohongshu.snippet
