@@ -3,7 +3,7 @@
 // 基线 blob：8b3e6927bc6ad6a8efb52e685284c683e09578d0
 // 修复：https://github.com/SeanX16/Network-Tools/blob/main/Scripts/xhs-hd-save.js
 // 修复基线 blob：2d264b506e2aa6ef513c976df46ed5bb21e8d8a0
-// 仅保存原视频测试 v3：播放保持回退版，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
+// 仅保存原视频测试 v4：播放保持回退版，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
 
 // 小红书视频信息流：从抓包中确认兼容的 MP4 类型里选择画质最高的一份。
 const compatibleStreamTypes = {
@@ -307,12 +307,12 @@ if (url.includes("/v10/note/video/save")) {
       }
     }
   }
-  console.log("[仅保存原视频 v3] 收到 v10 保存响应");
+  console.log("[仅保存原视频 v4] 收到 v10 保存响应");
   if (originalDownloadUrl && obj.data) {
     obj.data.download_url = originalDownloadUrl;
-    console.log("[仅保存原视频 v3] 已替换保存地址；播放流未改动");
+    console.log("[仅保存原视频 v4] 已替换保存地址；播放流未改动");
   } else {
-    console.log("[仅保存原视频 v3] 使用兼容流或服务器保存地址");
+    console.log("[仅保存原视频 v4] 使用兼容流或服务器保存地址");
   }
   // 解除下载限制
   if (obj.data?.disable) {
@@ -759,16 +759,16 @@ async function resolveOriginalSave(body) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     if (!found) {
-      console.log("[仅保存原视频 v3] 未找到可用的更高清原视频，使用原保存逻辑");
+      console.log("[仅保存原视频 v4] 未找到可用的更高清原视频，使用原保存逻辑");
       return null;
     }
     const { info, originalUrl } = found;
-    console.log(`[仅保存原视频 v3] 找到 ${info.width}×${info.height} ${info.codec}，${info.size} 字节`);
+    console.log(`[仅保存原视频 v4] 找到 ${info.width}×${info.height} ${info.codec}，${info.size} 字节`);
     return originalUrl;
   } catch (_) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
-    console.log("[仅保存原视频 v3] 获取或格式检查失败，使用原保存逻辑");
+    console.log("[仅保存原视频 v4] 获取或格式检查失败，使用原保存逻辑");
     return null;
   }
 }
@@ -819,9 +819,14 @@ function mp4U32(bytes, at) {
 }
 function mp4U16(bytes, at) { return (mp4U32(bytes, at) >>> 16); }
 function mp4Text(bytes, at, size) { return String.fromCharCode(...bytes.slice(at, at + size)); }
-function mp4Boxes(bytes, start, end) {
+function mp4Boxes(bytes, start, end, allowVisualPadding = false) {
+  if (start < 0 || end > bytes.length || start > end) throw new Error("box bounds");
   const boxes = [];
   for (let at = start; at < end;) {
+    // 本次 QuickTime hvc1 样本在扩展区末尾有一个全零 32-bit 字段。
+    // 仅允许视觉样本扩展区中的这四字节；不把任意截断 box 当作填充。
+    if (allowVisualPadding && end - at === 4 && mp4U32(bytes, at) === 0) break;
+    if (end - at < 8) throw new Error("box header");
     const size = mp4U32(bytes, at);
     if (size < 8 || at + size > end) throw new Error("box");
     boxes.push({ kind: mp4Text(bytes, at + 4, 4), start: at + 8, end: at + size });
@@ -857,7 +862,7 @@ function parseOriginalMoov(bytes, size) {
       if (bytes[tkhd.start] !== 0) return null;
       const matrix = [65536, 0, 0, 0, 65536, 0, 0, 0, 1073741824];
       if (matrix.some((v, i) => mp4U32(bytes, tkhd.start + 40 + i * 4) !== v)) return null;
-      const config = mp4Boxes(bytes, sample.start + 78, sample.end);
+      const config = mp4Boxes(bytes, sample.start + 78, sample.end, true);
       if (config.some(b => b.kind === "sinf" || b.kind === "dvcC" || b.kind === "dvvC")) return null;
       const codec = sample.kind === "hvc1" ? "hevc" : "h264";
       const codecConfig = config.find(b => b.kind === (codec === "hevc" ? "hvcC" : "avcC"));
@@ -869,10 +874,26 @@ function parseOriginalMoov(bytes, size) {
       tracks.push({ handler, codec, duration, width: mp4U16(bytes, sample.start + 24),
         height: mp4U16(bytes, sample.start + 26), fps: mp4U32(bytes, stsz.start + 8) * 1000 / duration });
     } else {
-      if (sample.kind !== "mp4a" || mp4U16(bytes, sample.start + 8) !== 0) return null;
-      const config = mp4Boxes(bytes, sample.start + 28, sample.end);
-      const esds = config.find(b => b.kind === "esds");
-      if (!esds || config.some(b => b.kind === "sinf") || !mp4AacDescriptor(bytes, esds.start + 4, esds.end)) return null;
+      if (sample.kind !== "mp4a" || sample.end - sample.start < 28) return null;
+      const version = mp4U16(bytes, sample.start + 8);
+      if (![0, 1].includes(version)) return null;
+      // QuickTime v1 增加四个 32-bit 字段，AAC esds 可以位于 wave 内。
+      const config = mp4Boxes(bytes, sample.start + (version === 1 ? 44 : 28), sample.end);
+      if (config.some(b => b.kind === "sinf")) return null;
+      const descriptors = config.filter(b => b.kind === "esds");
+      const waves = config.filter(b => b.kind === "wave");
+      if (waves.length > 1) return null;
+      if (waves.length) {
+        const nested = children(waves[0]);
+        const formats = nested.filter(b => b.kind === "frma");
+        if (nested.some(b => b.kind === "sinf" || b.kind === "wave") || formats.length !== 1 ||
+            formats[0].end - formats[0].start !== 4 || mp4Text(bytes, formats[0].start, 4) !== "mp4a") return null;
+        descriptors.push(...nested.filter(b => b.kind === "esds"));
+      }
+      if (descriptors.length !== 1) return null;
+      const esds = descriptors[0];
+      if (esds.end - esds.start < 4 || mp4U32(bytes, esds.start) !== 0 ||
+          !mp4AacDescriptor(bytes, esds.start + 4, esds.end)) return null;
       tracks.push({ handler, duration, channels: mp4U16(bytes, sample.start + 16) });
     }
   }
@@ -905,7 +926,6 @@ function mp4AacDescriptor(bytes, start, end) {
     bytes[decoder.start] === 64 && (bytes[decoder.start + 1] >>> 2) === 5;
 }
 
-
 function directVideoPath(url) {
   const match = typeof url === "string" && url.match(/^https?:\/\/(?:sns-video-[a-z0-9-]+\.xhscdn\.com|sns-v[0-9]+\.(?:xhscdn|rednotecdn)\.com)(\/stream\/[0-9]+\/[0-9]+\/[0-9]+\/[A-Za-z0-9_-]+\.mp4)(?:\?[^#]*)?$/);
   return match ? match[1] : null;
@@ -928,10 +948,10 @@ async function rewriteDirectVideoSave() {
       !Number.isFinite(matches[0].original_save.playback_size) ||
       matches[0].original_save.playback_size <= 0 ||
       Number(responseHeaders["content-length"]) !== matches[0].original_save.playback_size) return {};
-  console.log("[仅保存原视频 v3] 命中独立保存下载请求");
+  console.log("[仅保存原视频 v4] 命中独立保存下载请求");
   const originalUrl = await resolveOriginalSave(JSON.stringify({ data: { note_id: matches[0].id } }));
   if (!originalUrl) {
-    console.log("[仅保存原视频 v3] 原视频未就绪，放行原下载");
+    console.log("[仅保存原视频 v4] 原视频未就绪，放行原下载");
     return {};
   }
   // response-header 不替换响应体，保留原 Content-Length/Type 等实体字段。
@@ -944,13 +964,13 @@ async function rewriteDirectVideoSave() {
   headers.Location = originalUrl;
   headers["Cache-Control"] = "no-store, private, max-age=0";
   headers.Pragma = "no-cache";
-  console.log("[仅保存原视频 v3] 独立下载已返回 307 原视频跳转；播放请求未改动");
+  console.log("[仅保存原视频 v4] 独立下载已返回 307 原视频跳转；播放请求未改动");
   return { status: "HTTP/1.1 307 Temporary Redirect", headers };
 }
 
 if (directVideoPath($request.url)) {
   rewriteDirectVideoSave().then(result => $done(result), () => {
-    console.log("[仅保存原视频 v3] 下载探测失败，放行原下载");
+    console.log("[仅保存原视频 v4] 下载探测失败，放行原下载");
     $done({});
   });
 } else if ($response.body && /\/v10\/note\/video\/save(?:\?|$)/.test($request.url) &&

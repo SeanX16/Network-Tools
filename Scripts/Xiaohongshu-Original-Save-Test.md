@@ -1,8 +1,18 @@
-# 小红书仅保存原视频测试 v3（Quantumult X）
+# 小红书仅保存原视频测试 v4（Quantumult X）
 
 播放继续使用正式回退版的兼容流，保存阶段尝试下载标准编码的 1080P、2K/1440P 或 4K 原视频。2026-11-12 更新，订阅地址不变：
 
 https://raw.githubusercontent.com/SeanX16/Network-Tools/main/Scripts/Xiaohongshu-Original-Save-Test.conf
+
+## v4：修复部分 QuickTime 风格原视频被误拒绝
+
+本次失败 HAR 已命中 v27 CDN 保存请求，也成功取得官方分享页和原视频头尾元数据。旧解析器拒绝了视觉样本扩展区末尾的四字节零填充，以及 QuickTime v1 音频描述中嵌套在 `wave` 内的 AAC `esds`，因此回退到约 3.9 MB 的兼容文件，没有发出原视频 307。
+
+v4 仅修正保存阶段的上述解析：零填充只允许出现在视觉样本扩展区末尾，且必须恰好四字节全零；音频只增加 v1 和单层 `wave` 支持，仍检查 mp4a 格式、唯一 AAC 描述和加密标记。音频结构依据 [Apple v1 描述](https://developer.apple.com/documentation/quicktime-file-format/sound_sample_description_version_1)及[扩展结构说明](https://developer.apple.com/documentation/quicktime-file-format/sound_sample_description_extensions)。未知版本、畸形 box、加密音频及原有不支持的编码继续回退。
+
+这份真实原文件为 **2160×3840、HEVC Main 8-bit hvc1 + AAC LC、约 16.3 秒、111,606,271 字节（111.6 MB）**。已逐段校验下载范围和长度，完整音视频解码通过；文件头尾与 HAR 内容一致。相同 HAR 回放确认 v3 拒绝、v4 返回原视频 307，播放响应和缓存保持不变。另通过异常结构拒绝及已有保存回归检查。该 4K 样本更新后的 iPhone 相册写入仍待实测。
+
+用户已确认此前多条高清 HEVC 保存成功；本次 HAR 定位的是其中这一条失败，不据此推断其他未抓到的失败均为同一原因。
 
 ## v3 扩展范围
 
@@ -22,7 +32,7 @@ v2 已由用户确认：这条笔记播放正常、相册保存为二十多 MB �
 
 本次保存请求使用 `discover/9.53 (iPhone; ...)`，没有 Range，Referer 为 `https://app.xhs.cn/`。已观察到的播放/预加载请求使用 `IOS-RedDownload-player/preload-0`，带 Range。本版根据这些实际差异窄匹配；这不是平台保证的永久保存标志，不承诺覆盖其他版本或所有播放场景。
 
-v3 对上述小红书视频 CDN 域名族使用 `script-response-header` 规则。只有同时满足以下条件才探测原视频：
+当前版本对上述小红书视频 CDN 域名族使用 `script-response-header` 规则。只有同时满足以下条件才探测原视频：
 
 - GET，响应 HTTP 200、Content-Type 为 video/mp4 或 application/octet-stream；仍须是缓存中精确匹配的 MP4 路径和文件大小。
 - User-Agent 匹配本次 iPhone `discover/9.53`，Referer 一致，无 Range 或 If-Range。
@@ -31,20 +41,20 @@ v3 对上述小红书视频 CDN 域名族使用 `script-response-header` 规则�
 
 探测通过后返回 **307 Temporary Redirect**，指向原视频。设置 `Cache-Control: no-store`，避免保存跳转被缓存后复用于播放。播放器、预加载、Range、未知客户端、不匹配请求、探测失败及超时均原样放行。
 
-此前原视频播放候选注入曾导致 App 闪退，已撤回。**v3 不向播放候选注入原视频，不伪造播放流类型、尺寸或编码字段。**真实信息流回放中，发送给 App 的播放 JSON 与正式回退版相同。
+此前原视频播放候选注入曾导致 App 闪退，已撤回。**v4 不向播放候选注入原视频，不伪造播放流类型、尺寸或编码字段。**真实信息流回放中，发送给 App 的播放 JSON 与正式回退版相同。
 
 ## 更新与测试
 
-1. 退出小红书，更新本订阅的**资源配置和引用脚本**。v3 扩展了 CDN 规则及 MitM hostname，仅更新 JS 不够。
+1. 退出小红书，更新本订阅的**资源配置和引用脚本**。从 v3 升级时关键是更新引用 JS；资源名称也会更新为 v4。从 v1/v2 升级还必须更新 CDN 规则及 MitM hostname。
 2. 只启用本测试订阅，停用正式整合版、浏览与保存测试版、原版和独立高清保存版。保持 QX MitM 与证书信任正常。
 3. 重开这条笔记，生成包含文件大小的新缓存。先确认播放正常，再长按保存一次。
-4. 检查相册分辨率、声音和时长。源文件为 **1080×1920、HEVC hvc1 + AAC、约 25.7 MB**，完整解码通过；iPhone 的跳转、下载及相册写入仍待实测。
+4. 检查相册分辨率、声音和时长。本次失败样本应尝试保存为 **2160×3840 HEVC、约 111.6 MB、16.3 秒**；该样本的 iPhone 跳转、下载及相册写入仍待实测。
 
 若 App 仍复用旧文件，清理小红书自己的媒体缓存后退出重开。QX 清缓存任务只清理链接文本。异常时停用测试版，恢复[正式回退版](https://raw.githubusercontent.com/SeanX16/Network-Tools/main/Scripts/Xiaohongshu-Merged.conf)。
 
 ## 日志
 
-查找脚本 `xhs-original-save-test.js` 和前缀 `[仅保存原视频 v3]`：
+查找脚本 `xhs-original-save-test.js` 和前缀 `[仅保存原视频 v4]`：
 
 - `命中独立保存下载请求`：请求符合当前筛选条件。
 - `找到 宽×高 编码`（例如 `找到 2160×3840 hevc`）：原视频通过元数据检查，日志显示实际尺寸。
@@ -68,7 +78,7 @@ v10 支持保留，对应日志为 `收到 v10 保存响应` 和 `已替换保�
 
 真实 HAR 回放确认：播放响应不变，匹配的保存请求返回禁止缓存的 307；此前的播放器/预加载请求不改写。Range、未知版本、错误来源、长度不符、非 200、缺少/损坏缓存和解析失败均放行。既有 v10、超时及迟到响应回退、图片与规则保留检查继续通过。
 
-用真实保存请求头触发解析器，已联网完成分享页与两次 MP4 分段检查；源 CDN 也接受实际保存客户端的请求头，HTTP 200、文件长 25,671,872 字节，返回前缀与已完整解码的原文件一致。这些验证尚不包含 iPhone 的真实跳转和相册写入。
+用真实保存请求头触发解析器，已联网完成分享页与两次 MP4 分段检查；源 CDN 也接受实际保存客户端的请求头，HTTP 200、文件长 25,671,872 字节，返回前缀与已完整解码的原文件一致。该 1080P 样本后来已由用户确认 iPhone 播放与相册保存成功；本次新增 4K 样本仍待手机复测。
 
 状态码与响应头修改接口依据 [QX 官方示例](https://github.com/crossutility/Quantumult-X/blob/master/sample-rewrite-response-header.js)。用户 HAR、认证信息和带签名资源地址未提交仓库。
 
