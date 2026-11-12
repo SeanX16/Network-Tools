@@ -3,7 +3,7 @@
 // 基线 blob：8b3e6927bc6ad6a8efb52e685284c683e09578d0
 // 修复：https://github.com/SeanX16/Network-Tools/blob/main/Scripts/xhs-hd-save.js
 // 修复基线 blob：2d264b506e2aa6ef513c976df46ed5bb21e8d8a0
-// 仅保存原视频测试 v5：播放保持回退版，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
+// 仅保存原视频测试 v6：播放保持回退版，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
 
 // 小红书视频信息流：从抓包中确认兼容的 MP4 类型里选择画质最高的一份。
 const compatibleStreamTypes = {
@@ -307,12 +307,12 @@ if (url.includes("/v10/note/video/save")) {
       }
     }
   }
-  console.log("[仅保存原视频 v5] 收到 v10 保存响应");
+  console.log("[仅保存原视频 v6] 收到 v10 保存响应");
   if (originalDownloadUrl && obj.data) {
     obj.data.download_url = originalDownloadUrl;
-    console.log("[仅保存原视频 v5] 已替换保存地址；播放流未改动");
+    console.log("[仅保存原视频 v6] 已替换保存地址；播放流未改动");
   } else {
-    console.log("[仅保存原视频 v5] 使用兼容流或服务器保存地址");
+    console.log("[仅保存原视频 v6] 使用兼容流或服务器保存地址");
   }
   // 解除下载限制
   if (obj.data?.disable) {
@@ -759,17 +759,17 @@ async function resolveOriginalSave(body) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     if (!found) {
-      console.log("[仅保存原视频 v5] 未找到可用的更高清原视频，使用原保存逻辑");
+      console.log("[仅保存原视频 v6] 未找到可用的更高清原视频，使用原保存逻辑");
       return null;
     }
     const { info, originalUrl } = found;
-    console.log(`[仅保存原视频 v5] 找到 ${info.width}×${info.height} ${info.codec}，${info.size} 字节`);
+    console.log(`[仅保存原视频 v6] 找到 ${info.width}×${info.height} ${info.codec}，${info.bitDepth}-bit ${info.dynamicRange}，${info.size} 字节`);
     return originalUrl;
   } catch (error) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     const reason = /^mp4:[a-z0-9-]+$/.test(error?.message || "") ? error.message.slice(4) : "network-or-page";
-    console.log(`[仅保存原视频 v5] 原视频检查回退：${reason}；使用原保存逻辑`);
+    console.log(`[仅保存原视频 v6] 原视频检查回退：${reason}；使用原保存逻辑`);
     return null;
   }
 }
@@ -892,24 +892,57 @@ function mp4VideoSample(bytes, sample) {
   if (!["hvc1", "avc1"].includes(sample.kind)) mp4Fail("video-sample-type");
   mp4Need(bytes, sample.start, 78, sample.end);
   const config = mp4Boxes(bytes, sample.start + 78, sample.end, true);
-  if (config.some(b => ["sinf", "dvcC", "dvvC", "mdcv", "clli"].includes(b.kind))) mp4Fail("encrypted-or-hdr-video");
-  for (const color of config.filter(b => b.kind === "colr")) {
-    const type = mp4Text(bytes, color.start, 4, color.end);
-    if (["nclc", "nclx"].includes(type)) {
-      const transfer = mp4U16(bytes, color.start + 6, color.end);
-      if ([16, 18].includes(transfer)) mp4Fail("hdr-transfer");
-    }
-  }
+  if (config.some(b => b.kind === "sinf")) mp4Fail("encrypted-video");
+  const colors = config.filter(b => b.kind === "colr").map(b => {
+    const type = mp4Text(bytes, b.start, 4, b.end);
+    if (["nclc", "nclx"].includes(type)) mp4Need(bytes, b.start, type === "nclx" ? 11 : 10, b.end);
+    return ["nclc", "nclx"].includes(type) ? { primaries: mp4U16(bytes, b.start + 4, b.end),
+      transfer: mp4U16(bytes, b.start + 6, b.end), matrix: mp4U16(bytes, b.start + 8, b.end) } : null;
+  }).filter(Boolean);
+  if (colors.some(c => JSON.stringify(c) !== JSON.stringify(colors[0]))) mp4Fail("conflicting-color-metadata");
+  const color = colors[0];
   const codec = sample.kind === "hvc1" ? "hevc" : "h264";
   const c = mp4One(config, codec === "hevc" ? "hvcC" : "avcC");
   mp4Need(bytes, c.start, codec === "hevc" ? 23 : 7, c.end);
   if (bytes[c.start] !== 1) mp4Fail("codec-config-version");
-  if (codec === "hevc" && ((bytes[c.start + 1] & 31) !== 1 || (bytes[c.start + 16] & 3) !== 1 ||
-      (bytes[c.start + 17] & 7) !== 0 || (bytes[c.start + 18] & 7) !== 0)) mp4Fail("hevc-profile-or-depth");
+  let bitDepth = 8;
+  if (codec === "hevc") {
+    const profile = bytes[c.start + 1] & 31;
+    const luma = 8 + (bytes[c.start + 17] & 7), chroma = 8 + (bytes[c.start + 18] & 7);
+    if (![1, 2].includes(profile) || (bytes[c.start + 16] & 3) !== 1 || luma !== chroma ||
+        ![8, 10].includes(luma) || (profile === 1 && luma !== 8)) mp4Fail("hevc-profile-or-depth");
+    bitDepth = luma;
+  }
   if (codec === "h264" && ![66, 77, 100].includes(bytes[c.start + 1])) mp4Fail("h264-profile");
+  let dynamicRange = "SDR-or-unspecified";
+  const hdrTransfer = color && [16, 18].includes(color.transfer);
+  if (hdrTransfer) {
+    if (codec !== "hevc" || bitDepth !== 10 || color.primaries !== 9 || color.matrix !== 9) mp4Fail("hdr-color-or-depth");
+    dynamicRange = color.transfer === 16 ? "HDR10-PQ" : "HLG";
+  }
+  // 静态 HDR 元数据既可能在这些 box 中，也可能在 HEVC SEI 中；均保留原文件。
+  for (const [kind, length] of [["mdcv", 24], ["clli", 4], ["amve", 8]]) {
+    const item = mp4One(config, kind, false);
+    if (item && item.end - item.start !== length) mp4Fail("hdr-metadata-size");
+  }
+  const dolby = config.filter(b => ["dvcC", "dvvC", "dvwC"].includes(b.kind));
+  if (dolby.length) {
+    if (dolby.length !== 1 || dolby[0].kind === "dvwC") mp4Fail("dolby-config");
+    const d = dolby[0];
+    mp4Need(bytes, d.start, 24, d.end);
+    const packed = mp4U16(bytes, d.start + 2, d.end);
+    const profile = (packed >>> 9) & 127, level = (packed >>> 3) & 63;
+    const compatibility = bytes[d.start + 4] >>> 4, compression = (bytes[d.start + 4] >>> 2) & 3;
+    // 仅放行单层、带 RPU 的 Profile 8.1/8.4；双层/P5 等保持回退。
+    if (bytes[d.start] !== 1 || bytes[d.start + 1] !== 0 || profile !== 8 || level < 1 || level > 13 ||
+        (packed & 7) !== 5 || compression !== 0 || ![1, 4].includes(compatibility) ||
+        codec !== "hevc" || bitDepth !== 10 || !hdrTransfer ||
+        color.transfer !== (compatibility === 1 ? 16 : 18)) mp4Fail("dolby-profile-or-base-layer");
+    dynamicRange = compatibility === 1 ? "DolbyVision-8.1" : "DolbyVision-8.4";
+  }
   const width = mp4U16(bytes, sample.start + 24, sample.end), height = mp4U16(bytes, sample.start + 26, sample.end);
   if (!width || !height) mp4Fail("video-dimensions");
-  return { codec, width, height };
+  return { codec, width, height, bitDepth, dynamicRange };
 }
 function mp4AudioSample(bytes, sample) {
   if (sample.kind !== "mp4a") mp4Fail("audio-sample-type");
@@ -965,8 +998,8 @@ function parseOriginalMoov(bytes, size) {
     if (descriptions.some(d => JSON.stringify(d) !== JSON.stringify(descriptions[0]))) mp4Fail("changing-sample-format");
     if (handler === "vide") {
       const rotation = mp4Rotation(bytes, mp4One(track, "tkhd"));
-      const { codec, width, height } = descriptions[0];
-      videos.push({ codec, width: rotation % 180 ? height : width, height: rotation % 180 ? width : height, duration, rotation });
+      const { codec, width, height, bitDepth, dynamicRange } = descriptions[0];
+      videos.push({ codec, width: rotation % 180 ? height : width, height: rotation % 180 ? width : height, bitDepth, dynamicRange, duration, rotation });
     } else audios.push({ ...descriptions[0], duration });
   }
   if (videos.length !== 1 || audios.length > 8) mp4Fail("audio-video-track-count");
@@ -1023,10 +1056,10 @@ async function rewriteDirectVideoSave() {
       !Number.isFinite(matches[0].original_save.playback_size) ||
       matches[0].original_save.playback_size <= 0 ||
       Number(responseHeaders["content-length"]) !== matches[0].original_save.playback_size) return {};
-  console.log("[仅保存原视频 v5] 命中独立保存下载请求");
+  console.log("[仅保存原视频 v6] 命中独立保存下载请求");
   const originalUrl = await resolveOriginalSave(JSON.stringify({ data: { note_id: matches[0].id } }));
   if (!originalUrl) {
-    console.log("[仅保存原视频 v5] 原视频未就绪，放行原下载");
+    console.log("[仅保存原视频 v6] 原视频未就绪，放行原下载");
     return {};
   }
   // response-header 不替换响应体，保留原 Content-Length/Type 等实体字段。
@@ -1039,13 +1072,13 @@ async function rewriteDirectVideoSave() {
   headers.Location = originalUrl;
   headers["Cache-Control"] = "no-store, private, max-age=0";
   headers.Pragma = "no-cache";
-  console.log("[仅保存原视频 v5] 独立下载已返回 307 原视频跳转；播放请求未改动");
+  console.log("[仅保存原视频 v6] 独立下载已返回 307 原视频跳转；播放请求未改动");
   return { status: "HTTP/1.1 307 Temporary Redirect", headers };
 }
 
 if (directVideoPath($request.url)) {
   rewriteDirectVideoSave().then(result => $done(result), () => {
-    console.log("[仅保存原视频 v5] 下载探测失败，放行原下载");
+    console.log("[仅保存原视频 v6] 下载探测失败，放行原下载");
     $done({});
   });
 } else if ($response.body && /\/v10\/note\/video\/save(?:\?|$)/.test($request.url) &&
