@@ -3,15 +3,15 @@
 // 基线 blob：8b3e6927bc6ad6a8efb52e685284c683e09578d0
 // 修复：https://github.com/SeanX16/Network-Tools/blob/main/Scripts/xhs-hd-save.js
 // 修复基线 blob：2d264b506e2aa6ef513c976df46ed5bb21e8d8a0
-// 仅保存原视频测试 v7：播放保持回退版，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
+// 仅保存原视频测试 v8：播放交给 APP 原生选流，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
 
-// 小红书视频信息流：从抓包中确认兼容的 MP4 类型里选择画质最高的一份。
+// 仅保存兜底：从已验证兼容的流中选一份，不删除或修改 APP 播放候选。
 const compatibleStreamTypes = {
   h265: { codec: "hevc", types: new Set([86, 533, 616, 618]), preference: 1 },
   h264: { codec: "h264", types: new Set([258]), preference: 0 }
 };
 
-function chooseCompatibleStream(streams) {
+function chooseCompatibleSaveStream(streams) {
   const candidates = [];
   for (const [key, { codec, types, preference }] of Object.entries(compatibleStreamTypes)) {
     const variants = streams[key];
@@ -257,40 +257,20 @@ if (url.includes("/v4/note/videofeed")) {
         }
       }
 
-      // 高清保存修复：只保留已确认兼容的 MP4/AAC 视频流。
-      // 原版的权限和按钮处理保留；不沿用独立修复版“仅原生允许保存”的门槛。
+      // 播放流、默认标记和顺序原样交给 APP；兼容白名单仅供保存失败兜底。
       const media = item?.video_info_v2?.media;
-      const selected = media?.video?.drm_type === 0 && media?.stream
-        ? chooseCompatibleStream(media.stream)
-        : undefined;
-      if (selected) {
-        for (const [key, variants] of Object.entries(media.stream)) {
-          if (!Array.isArray(variants)) continue;
-          media.stream[key] = key === selected.key
-            ? [{ ...selected.stream, default_stream: 1 }]
-            : [];
-        }
-      }
-      // 保存接口缓存使用同一个兼容地址；没有候选时保留原视频流和服务器下载地址。
-      const selectedStream = selected?.stream;
-      // 存入缓存数组
-      if (item?.id && selectedStream?.master_url) {
-        const data = {
-          id: item.id,
-          url: selectedStream.master_url
-        };
-        console.log(`提取成功 ➜ ${item.id} → ${selectedStream.stream_desc}`);
-        // 仅向 QX 本地缓存附加保存所需信息，不写回 App 播放响应。
-        const source = originalSaveSource(item, selectedStream);
-        if (source) data.original_save = source;
-        videoData.push(data);
-        console.log(`[缓存] ID:${item.id} | 规格:${selectedStream.quality_type} | 码率:${selectedStream.avg_bitrate}`);
-      } else {
-        console.log(`未找到可用视频: ${item.id}`);
+      const compatible = media?.video?.drm_type === 0 && media?.stream
+        ? chooseCompatibleSaveStream(media.stream) : undefined;
+      const candidates = media?.video?.drm_type === 0 ? collectSaveCandidates(media?.stream) : [];
+      const reference = compatible?.stream || [...candidates].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+      const source = originalSaveSource(item, reference);
+      if (/^[a-f0-9]{24}$/i.test(item?.id || "")) {
+        videoData.push({ id: item.id, url: compatible?.stream.master_url || null,
+          save_cache_version: 8, save_candidates: candidates, original_save: source });
       }
     }
     // 写入本地持久化缓存
-    $.setdata(JSON.stringify(videoData), "redBookVideoFeed");
+    storeSaveEntries(videoData);
     console.log(`已缓存普通视频 ${videoData.length} 条`);
   }
 }
@@ -302,17 +282,17 @@ if (url.includes("/v10/note/video/save")) {
   if (!Array.isArray(videoFeed)) videoFeed = [];
   if (obj.data?.note_id !== "" && videoFeed?.length > 0) {
     for (let item of videoFeed) {
-      if (item.id === obj.data.note_id) {
+      if (item.id === obj.data.note_id && freshSaveEntry(item) && item.url) {
         obj.data.download_url = item.url;
       }
     }
   }
-  console.log("[仅保存原视频 v7] 收到 v10 保存响应");
+  console.log("[仅保存原视频 v8] 收到 v10 保存响应");
   if (originalDownloadUrl && obj.data) {
     obj.data.download_url = originalDownloadUrl;
-    console.log("[仅保存原视频 v7] 已替换保存地址；播放流未改动");
+    console.log("[仅保存原视频 v8] 已替换保存地址；播放流未改动");
   } else {
-    console.log("[仅保存原视频 v7] 使用兼容流或服务器保存地址");
+    console.log("[仅保存原视频 v8] 使用兼容流或服务器保存地址");
   }
   // 解除下载限制
   if (obj.data?.disable) {
@@ -680,29 +660,107 @@ function extractLivePhotos(pictures, livePhotos, commentId, prefix = "") {
 
 function Env(t, e) { class s { constructor(t) { this.env = t } send(t, e = "GET") { t = "string" == typeof t ? { url: t } : t; let s = this.get; return "POST" === e && (s = this.post), new Promise((e, i) => { s.call(this, t, (t, s, r) => { t ? i(t) : e(s) }) }) } get(t) { return this.send.call(this.env, t) } post(t) { return this.send.call(this.env, t, "POST") } } return new class { constructor(t, e) { this.name = t, this.http = new s(this), this.data = null, this.dataFile = "box.dat", this.logs = [], this.isMute = !1, this.isNeedRewrite = !1, this.logSeparator = "\n", this.encoding = "utf-8", this.startTime = (new Date).getTime(), Object.assign(this, e), this.log("", `\ud83d\udd14${this.name}, \u5f00\u59cb!`) } isNode() { return "undefined" != typeof module && !!module.exports } isQuanX() { return "undefined" != typeof $task } isSurge() { return "undefined" != typeof $httpClient && "undefined" == typeof $loon } isLoon() { return "undefined" != typeof $loon } isShadowrocket() { return "undefined" != typeof $rocket } isStash() { return "undefined" != typeof $environment && $environment["stash-version"] } toObj(t, e = null) { try { return JSON.parse(t) } catch { return e } } toStr(t, e = null) { try { return JSON.stringify(t) } catch { return e } } getjson(t, e) { let s = e; const i = this.getdata(t); if (i) try { s = JSON.parse(this.getdata(t)) } catch { } return s } setjson(t, e) { try { return this.setdata(JSON.stringify(t), e) } catch { return !1 } } getScript(t) { return new Promise(e => { this.get({ url: t }, (t, s, i) => e(i)) }) } runScript(t, e) { return new Promise(s => { let i = this.getdata("@chavy_boxjs_userCfgs.httpapi"); i = i ? i.replace(/\n/g, "").trim() : i; let r = this.getdata("@chavy_boxjs_userCfgs.httpapi_timeout"); r = r ? 1 * r : 20, r = e && e.timeout ? e.timeout : r; const [o, a] = i.split("@"), n = { url: `http://${a}/v1/scripting/evaluate`, body: { script_text: t, mock_type: "cron", timeout: r }, headers: { "X-Key": o, Accept: "*/*" } }; this.post(n, (t, e, i) => s(i)) }).catch(t => this.logErr(t)) } loaddata() { if (!this.isNode()) return {}; { this.fs = this.fs ? this.fs : require("fs"), this.path = this.path ? this.path : require("path"); const t = this.path.resolve(this.dataFile), e = this.path.resolve(process.cwd(), this.dataFile), s = this.fs.existsSync(t), i = !s && this.fs.existsSync(e); if (!s && !i) return {}; { const i = s ? t : e; try { return JSON.parse(this.fs.readFileSync(i)) } catch (t) { return {} } } } } writedata() { if (this.isNode()) { this.fs = this.fs ? this.fs : require("fs"), this.path = this.path ? this.path : require("path"); const t = this.path.resolve(this.dataFile), e = this.path.resolve(process.cwd(), this.dataFile), s = this.fs.existsSync(t), i = !s && this.fs.existsSync(e), r = JSON.stringify(this.data); s ? this.fs.writeFileSync(t, r) : i ? this.fs.writeFileSync(e, r) : this.fs.writeFileSync(t, r) } } lodash_get(t, e, s) { const i = e.replace(/\[(\d+)\]/g, ".$1").split("."); let r = t; for (const t of i) if (r = Object(r)[t], void 0 === r) return s; return r } lodash_set(t, e, s) { return Object(t) !== t ? t : (Array.isArray(e) || (e = e.toString().match(/[^.[\]]+/g) || []), e.slice(0, -1).reduce((t, s, i) => Object(t[s]) === t[s] ? t[s] : t[s] = Math.abs(e[i + 1]) >> 0 == +e[i + 1] ? [] : {}, t)[e[e.length - 1]] = s, t) } getdata(t) { let e = this.getval(t); if (/^@/.test(t)) { const [, s, i] = /^@(.*?)\.(.*?)$/.exec(t), r = s ? this.getval(s) : ""; if (r) try { const t = JSON.parse(r); e = t ? this.lodash_get(t, i, "") : e } catch (t) { e = "" } } return e } setdata(t, e) { let s = !1; if (/^@/.test(e)) { const [, i, r] = /^@(.*?)\.(.*?)$/.exec(e), o = this.getval(i), a = i ? "null" === o ? null : o || "{}" : "{}"; try { const e = JSON.parse(a); this.lodash_set(e, r, t), s = this.setval(JSON.stringify(e), i) } catch (e) { const o = {}; this.lodash_set(o, r, t), s = this.setval(JSON.stringify(o), i) } } else s = this.setval(t, e); return s } getval(t) { return this.isSurge() || this.isLoon() ? $persistentStore.read(t) : this.isQuanX() ? $prefs.valueForKey(t) : this.isNode() ? (this.data = this.loaddata(), this.data[t]) : this.data && this.data[t] || null } setval(t, e) { return this.isSurge() || this.isLoon() ? $persistentStore.write(t, e) : this.isQuanX() ? $prefs.setValueForKey(t, e) : this.isNode() ? (this.data = this.loaddata(), this.data[e] = t, this.writedata(), !0) : this.data && this.data[e] || null } initGotEnv(t) { this.got = this.got ? this.got : require("got"), this.cktough = this.cktough ? this.cktough : require("tough-cookie"), this.ckjar = this.ckjar ? this.ckjar : new this.cktough.CookieJar, t && (t.headers = t.headers ? t.headers : {}, void 0 === t.headers.Cookie && void 0 === t.cookieJar && (t.cookieJar = this.ckjar)) } get(t, e = (() => { })) { if (t.headers && (delete t.headers["Content-Type"], delete t.headers["Content-Length"]), this.isSurge() || this.isLoon()) this.isSurge() && this.isNeedRewrite && (t.headers = t.headers || {}, Object.assign(t.headers, { "X-Surge-Skip-Scripting": !1 })), $httpClient.get(t, (t, s, i) => { !t && s && (s.body = i, s.statusCode = s.status ? s.status : s.statusCode, s.status = s.statusCode), e(t, s, i) }); else if (this.isQuanX()) this.isNeedRewrite && (t.opts = t.opts || {}, Object.assign(t.opts, { hints: !1 })), $task.fetch(t).then(t => { const { statusCode: s, statusCode: i, headers: r, body: o } = t; e(null, { status: s, statusCode: i, headers: r, body: o }, o) }, t => e(t && t.error || "UndefinedError")); else if (this.isNode()) { let s = require("iconv-lite"); this.initGotEnv(t), this.got(t).on("redirect", (t, e) => { try { if (t.headers["set-cookie"]) { const s = t.headers["set-cookie"].map(this.cktough.Cookie.parse).toString(); s && this.ckjar.setCookieSync(s, null), e.cookieJar = this.ckjar } } catch (t) { this.logErr(t) } }).then(t => { const { statusCode: i, statusCode: r, headers: o, rawBody: a } = t, n = s.decode(a, this.encoding); e(null, { status: i, statusCode: r, headers: o, rawBody: a, body: n }, n) }, t => { const { message: i, response: r } = t; e(i, r, r && s.decode(r.rawBody, this.encoding)) }) } } post(t, e = (() => { })) { const s = t.method ? t.method.toLocaleLowerCase() : "post"; if (t.body && t.headers && !t.headers["Content-Type"] && (t.headers["Content-Type"] = "application/x-www-form-urlencoded"), t.headers && delete t.headers["Content-Length"], this.isSurge() || this.isLoon()) this.isSurge() && this.isNeedRewrite && (t.headers = t.headers || {}, Object.assign(t.headers, { "X-Surge-Skip-Scripting": !1 })), $httpClient[s](t, (t, s, i) => { !t && s && (s.body = i, s.statusCode = s.status ? s.status : s.statusCode, s.status = s.statusCode), e(t, s, i) }); else if (this.isQuanX()) t.method = s, this.isNeedRewrite && (t.opts = t.opts || {}, Object.assign(t.opts, { hints: !1 })), $task.fetch(t).then(t => { const { statusCode: s, statusCode: i, headers: r, body: o } = t; e(null, { status: s, statusCode: i, headers: r, body: o }, o) }, t => e(t && t.error || "UndefinedError")); else if (this.isNode()) { let i = require("iconv-lite"); this.initGotEnv(t); const { url: r, ...o } = t; this.got[s](r, o).then(t => { const { statusCode: s, statusCode: r, headers: o, rawBody: a } = t, n = i.decode(a, this.encoding); e(null, { status: s, statusCode: r, headers: o, rawBody: a, body: n }, n) }, t => { const { message: s, response: r } = t; e(s, r, r && i.decode(r.rawBody, this.encoding)) }) } } time(t, e = null) { const s = e ? new Date(e) : new Date; let i = { "M+": s.getMonth() + 1, "d+": s.getDate(), "H+": s.getHours(), "m+": s.getMinutes(), "s+": s.getSeconds(), "q+": Math.floor((s.getMonth() + 3) / 3), S: s.getMilliseconds() }; /(y+)/.test(t) && (t = t.replace(RegExp.$1, (s.getFullYear() + "").substr(4 - RegExp.$1.length))); for (let e in i) new RegExp("(" + e + ")").test(t) && (t = t.replace(RegExp.$1, 1 == RegExp.$1.length ? i[e] : ("00" + i[e]).substr(("" + i[e]).length))); return t } msg(e = t, s = "", i = "", r) { const o = t => { if (!t) return t; if ("string" == typeof t) return this.isLoon() ? t : this.isQuanX() ? { "open-url": t } : this.isSurge() ? { url: t } : void 0; if ("object" == typeof t) { if (this.isLoon()) { let e = t.openUrl || t.url || t["open-url"], s = t.mediaUrl || t["media-url"]; return { openUrl: e, mediaUrl: s } } if (this.isQuanX()) { let e = t["open-url"] || t.url || t.openUrl, s = t["media-url"] || t.mediaUrl, i = t["update-pasteboard"] || t.updatePasteboard; return { "open-url": e, "media-url": s, "update-pasteboard": i } } if (this.isSurge()) { let e = t.url || t.openUrl || t["open-url"]; return { url: e } } } }; if (this.isMute || (this.isSurge() || this.isLoon() ? $notification.post(e, s, i, o(r)) : this.isQuanX() && $notify(e, s, i, o(r))), !this.isMuteLog) { let t = ["", "==============\ud83d\udce3\u7cfb\u7edf\u901a\u77e5\ud83d\udce3=============="]; t.push(e), s && t.push(s), i && t.push(i), console.log(t.join("\n")), this.logs = this.logs.concat(t) } } log(...t) { t.length > 0 && (this.logs = [...this.logs, ...t]), console.log(t.join(this.logSeparator)) } logErr(t, e) { const s = !this.isSurge() && !this.isQuanX() && !this.isLoon(); s ? this.log("", `\u2757\ufe0f${this.name}, \u9519\u8bef!`, t.stack) : this.log("", `\u2757\ufe0f${this.name}, \u9519\u8bef!`, t) } wait(t) { return new Promise(e => setTimeout(e, t)) } done(t = {}) { const e = (new Date).getTime(), s = (e - this.startTime) / 1e3; this.log("", `\ud83d\udd14${this.name}, \u7ed3\u675f! \ud83d\udd5b ${s} \u79d2`), this.log(), this.isSurge() || this.isQuanX() || this.isLoon() ? $done(t) : this.isNode() && process.exit(1) } }(t, e) }
 
+// 播放候选只读；保存缓存不携带所有候选的签名 URL，只记录媒体身份和比较参数。
+function collectSaveCandidates(streams) {
+  const paths = new Map();
+  let count = 0;
+  for (const variants of Object.values(streams || {})) {
+    if (!Array.isArray(variants)) continue;
+    for (const stream of variants) {
+      if (++count > 64) return [];
+      if (!stream || ![stream.width, stream.height, stream.size].every(n => Number.isSafeInteger(n) && n > 0) ||
+          !Number.isFinite(stream.duration) || stream.duration <= 0) continue;
+      const urls = [stream.master_url, ...(Array.isArray(stream.backup_urls) ? stream.backup_urls.slice(0, 8) : [])];
+      for (const url of urls) {
+        const path = directVideoPath(url);
+        if (!path || path.length > 512) continue;
+        const candidate = { path, size: stream.size, width: stream.width, height: stream.height, duration: stream.duration };
+        if (!paths.has(path)) paths.set(path, candidate);
+        else if (JSON.stringify(paths.get(path)) !== JSON.stringify(candidate)) paths.set(path, null);
+        if (paths.size > 128) return [];
+      }
+    }
+  }
+  // 相同路径的元数据冲突时不猜测该路径代表哪份文件。
+  return [...paths.values()].filter(Boolean);
+}
 
 function originalSaveSource(note, stream) {
   const video = note?.video_info_v2?.media?.video;
   if (video?.drm_type !== 0 || !/^[a-f0-9]{24}$/i.test(note.id || "") ||
-      ![stream.width, stream.height, stream.duration].every(n => Number.isFinite(n) && n > 0)) return null;
+      !stream || ![stream.width, stream.height, stream.duration].every(n => Number.isFinite(n) && n > 0)) return null;
   const consumer = note.video_info_v2.consumer;
   const key = consumer?.origin_video_key || consumer?.originVideoKey;
   const link = note.share_info?.link;
   const validKey = typeof key === "string" && /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]{16,}$/.test(key);
   const match = typeof link === "string" && link.match(/^https:\/\/www\.(?:xiaohongshu|rednote)\.com\/(?:discovery\/item|explore)\/([a-f0-9]{24})(?:\?[^#]*)?$/i);
-  if (!validKey && (!match || match[1] !== note.id)) return null;
   return { origin_key: validKey ? key : null, share_url: match?.[1] === note.id ? link : null,
     width: stream.width, height: stream.height, duration: stream.duration,
     playback_size: stream.size, captured_at: Date.now() };
 }
 
+function freshSaveEntry(entry) {
+  const captured = entry?.original_save?.captured_at;
+  return /^[a-f0-9]{24}$/i.test(entry?.id || "") && Number.isFinite(captured) &&
+    captured > 0 && Date.now() >= captured && Date.now() - captured <= 3600000;
+}
+
+function saveCandidates(entry) {
+  if (entry?.save_cache_version === 8) return Array.isArray(entry.save_candidates) ? entry.save_candidates : [];
+  if (entry?.save_cache_version !== undefined) return [];
+  // 更新脚本但尚未重开笔记时，旧缓存仍只允许原来的单路径匹配。
+  const source = entry?.original_save;
+  return source ? [{ path: directVideoPath(entry.url), size: source.playback_size,
+    width: source.width, height: source.height, duration: source.duration }] : [];
+}
+
+function findSaveMatch(cache, path, size) {
+  if (!path || !Array.isArray(cache) || cache.length > 100) return null;
+  const matches = [];
+  for (const entry of cache) {
+    if (!freshSaveEntry(entry)) continue;
+    const candidates = saveCandidates(entry);
+    if (candidates.length > 128) continue;
+    for (const candidate of candidates) {
+      if (candidate?.path !== path) continue;
+      // 先判定路径唯一，不能用大小消除跨笔记身份冲突。
+      matches.push({ entry, candidate });
+    }
+  }
+  if (matches.length !== 1) return null;
+  const match = matches[0], c = match.candidate;
+  if (![c.width, c.height, c.size].every(n => Number.isSafeInteger(n) && n > 0) ||
+      !Number.isFinite(c.duration) || c.duration <= 0 || (size !== undefined && size !== c.size)) return null;
+  return match;
+}
+
+function storeSaveEntries(entries) {
+  let previous;
+  try { previous = JSON.parse($.getdata("redBookVideoFeed") || "null"); } catch (_) { previous = null; }
+  const byId = new Map();
+  // 保留最近笔记，避免 APP 预取下一条响应后丢失当前笔记的保存身份。
+  for (const entry of Array.isArray(previous) ? previous.slice(0, 20) : []) {
+    if (entry?.save_cache_version === 8 && freshSaveEntry(entry)) byId.set(entry.id, entry);
+  }
+  for (const entry of entries) {
+    byId.delete(entry.id);
+    if (freshSaveEntry(entry)) byId.set(entry.id, entry);
+  }
+  const recent = [...byId.values()].reverse().sort((a, b) => b.original_save.captured_at - a.original_save.captured_at).slice(0, 20);
+  $.setdata(JSON.stringify(recent), "redBookVideoFeed");
+}
+
 // 保存接口或匹配到的独立保存下载调用此函数；不改写信息流中的播放数据。
-async function resolveOriginalSave(body) {
+async function resolveOriginalSave(body, matchedCandidate) {
   const response = JSON.parse(body);
   const noteId = response.data?.note_id;
   const cache = JSON.parse($.getdata("redBookVideoFeed") || "null");
-  const entry = Array.isArray(cache) ? cache.find(item => item?.id === noteId) : null;
-  const source = entry?.original_save;
+  const entries = Array.isArray(cache) ? cache.filter(item => item?.id === noteId) : [];
+  const entry = entries.length === 1 ? entries[0] : null;
+  const responseMatch = findSaveMatch(cache, directVideoPath(response.data?.download_url));
+  const candidate = matchedCandidate || (responseMatch?.entry.id === noteId ? responseMatch.candidate : null);
+  const source = entry?.original_save && { ...entry.original_save,
+    ...(candidate ? { width: candidate.width, height: candidate.height, duration: candidate.duration } : {}) };
   if (!/^[a-f0-9]{24}$/i.test(noteId || "") || !source ||
       ![source.width, source.height, source.duration, source.captured_at].every(n => Number.isFinite(n) && n > 0) ||
       Date.now() < source.captured_at || Date.now() - source.captured_at > 3600000) return null;
@@ -759,17 +817,17 @@ async function resolveOriginalSave(body) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     if (!found) {
-      console.log("[仅保存原视频 v7] 未找到符合条件的原视频，使用原保存逻辑");
+      console.log("[仅保存原视频 v8] 未找到符合条件的原视频，使用原保存逻辑");
       return null;
     }
     const { info, originalUrl } = found;
-    console.log(`[仅保存原视频 v7] 找到 ${info.width}×${info.height} ${info.codec}，${info.bitDepth}-bit ${info.dynamicRange}，${info.size} 字节`);
+    console.log(`[仅保存原视频 v8] 找到 ${info.width}×${info.height} ${info.codec}，${info.bitDepth}-bit ${info.dynamicRange}，${info.size} 字节`);
     return originalUrl;
   } catch (error) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     const reason = /^mp4:[a-z0-9-]+$/.test(error?.message || "") ? error.message.slice(4) : "network-or-page";
-    console.log(`[仅保存原视频 v7] 原视频检查回退：${reason}；使用原保存逻辑`);
+    console.log(`[仅保存原视频 v8] 原视频检查回退：${reason}；使用原保存逻辑`);
     return null;
   }
 }
@@ -1051,16 +1109,21 @@ async function rewriteDirectVideoSave() {
   const path = directVideoPath($request.url);
   if (!path) return {};
   const cache = JSON.parse($.getdata("redBookVideoFeed") || "null");
-  const matches = Array.isArray(cache) ? cache.filter(item => directVideoPath(item?.url) === path) : [];
-  if (matches.length !== 1 || !matches[0].original_save ||
-      !Number.isFinite(matches[0].original_save.playback_size) ||
-      matches[0].original_save.playback_size <= 0 ||
-      Number(responseHeaders["content-length"]) !== matches[0].original_save.playback_size) return {};
-  console.log("[仅保存原视频 v7] 命中独立保存下载请求");
-  const originalUrl = await resolveOriginalSave(JSON.stringify({ data: { note_id: matches[0].id } }));
-  if (!originalUrl) {
-    console.log("[仅保存原视频 v7] 原视频未就绪，放行原下载");
-    return {};
+  const match = findSaveMatch(cache, path, Number(responseHeaders["content-length"]));
+  if (!match) return {};
+  console.log("[仅保存原视频 v8] 命中独立保存下载请求");
+  const originalUrl = await resolveOriginalSave(JSON.stringify({ data: { note_id: match.entry.id } }), match.candidate);
+  let target = originalUrl;
+  if (!target) {
+    // 原生保存可能选中相册不支持的流；仅保存请求可回到旧版已验证的兼容候选。
+    const fallbackPath = directVideoPath(match.entry.url);
+    const fallback = findSaveMatch(cache, fallbackPath);
+    if (match.entry.save_cache_version === 8 && fallbackPath !== path &&
+        fallback?.entry.id === match.entry.id) target = match.entry.url;
+    if (!target) {
+      console.log("[仅保存原视频 v8] 原视频未就绪，放行原下载");
+      return {};
+    }
   }
   // response-header 不替换响应体，保留原 Content-Length/Type 等实体字段。
   // 禁止缓存 307，避免把这次保存的跳转复用于后续播放器请求。
@@ -1069,16 +1132,17 @@ async function rewriteDirectVideoSave() {
   for (const [key, value] of Object.entries($response.headers || {})) {
     if (!replaced.has(key.toLowerCase())) headers[key] = value;
   }
-  headers.Location = originalUrl;
+  headers.Location = target;
   headers["Cache-Control"] = "no-store, private, max-age=0";
   headers.Pragma = "no-cache";
-  console.log("[仅保存原视频 v7] 独立下载已返回 307 原视频跳转；播放请求未改动");
+  console.log(originalUrl ? "[仅保存原视频 v8] 独立下载已返回 307 原视频跳转；播放请求未改动" :
+    "[仅保存原视频 v8] 原文件不可用，独立下载已返回 307 兼容流兜底；播放请求未改动");
   return { status: "HTTP/1.1 307 Temporary Redirect", headers };
 }
 
 if (directVideoPath($request.url)) {
   rewriteDirectVideoSave().then(result => $done(result), () => {
-    console.log("[仅保存原视频 v7] 下载探测失败，放行原下载");
+    console.log("[仅保存原视频 v8] 下载探测失败，放行原下载");
     $done({});
   });
 } else if ($response.body && /\/v10\/note\/video\/save(?:\?|$)/.test($request.url) &&
