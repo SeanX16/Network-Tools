@@ -3,7 +3,7 @@
 // 基线 blob：8b3e6927bc6ad6a8efb52e685284c683e09578d0
 // 修复：https://github.com/SeanX16/Network-Tools/blob/main/Scripts/xhs-hd-save.js
 // 修复基线 blob：2d264b506e2aa6ef513c976df46ed5bb21e8d8a0
-// 仅保存原视频测试 v1：播放响应保持回退版原样，只在 v10 保存响应中尝试原视频地址。
+// 仅保存原视频测试 v2：播放响应保持回退版原样，支持保存接口及已观察到的独立下载请求。
 
 // 小红书视频信息流：从抓包中确认兼容的 MP4 类型里选择画质最高的一份。
 const compatibleStreamTypes = {
@@ -307,12 +307,12 @@ if (url.includes("/v10/note/video/save")) {
       }
     }
   }
-  console.log("[仅保存原视频 v1] 收到 v10 保存响应");
+  console.log("[仅保存原视频 v2] 收到 v10 保存响应");
   if (originalDownloadUrl && obj.data) {
     obj.data.download_url = originalDownloadUrl;
-    console.log("[仅保存原视频 v1] 已替换保存地址；播放流未改动");
+    console.log("[仅保存原视频 v2] 已替换保存地址；播放流未改动");
   } else {
-    console.log("[仅保存原视频 v1] 使用兼容流或服务器保存地址");
+    console.log("[仅保存原视频 v2] 使用兼容流或服务器保存地址");
   }
   // 解除下载限制
   if (obj.data?.disable) {
@@ -693,10 +693,11 @@ function originalSaveSource(note, stream) {
   const match = typeof link === "string" && link.match(/^https:\/\/www\.(?:xiaohongshu|rednote)\.com\/(?:discovery\/item|explore)\/([a-f0-9]{24})(?:\?[^#]*)?$/i);
   if (!validKey && (!match || match[1] !== note.id)) return null;
   return { origin_key: validKey ? key : null, share_url: match?.[1] === note.id ? link : null,
-    width: stream.width, height: stream.height, duration: stream.duration, captured_at: Date.now() };
+    width: stream.width, height: stream.height, duration: stream.duration,
+    playback_size: stream.size, captured_at: Date.now() };
 }
 
-// 只有 v10 保存响应会进入此函数；播放阶段不查询分享页或下载原视频数据。
+// 保存接口或匹配到的独立保存下载调用此函数；不改写信息流中的播放数据。
 async function resolveOriginalSave(body) {
   const response = JSON.parse(body);
   const noteId = response.data?.note_id;
@@ -759,16 +760,16 @@ async function resolveOriginalSave(body) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     if (!found) {
-      console.log("[仅保存原视频 v1] 未找到可用的更高清原视频，使用原保存逻辑");
+      console.log("[仅保存原视频 v2] 未找到可用的更高清原视频，使用原保存逻辑");
       return null;
     }
     const { info, originalUrl } = found;
-    console.log(`[仅保存原视频 v1] 找到 ${info.width}×${info.height} ${info.codec}，${info.size} 字节`);
+    console.log(`[仅保存原视频 v2] 找到 ${info.width}×${info.height} ${info.codec}，${info.size} 字节`);
     return originalUrl;
   } catch (_) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
-    console.log("[仅保存原视频 v1] 获取或格式检查失败，使用原保存逻辑");
+    console.log("[仅保存原视频 v2] 获取或格式检查失败，使用原保存逻辑");
     return null;
   }
 }
@@ -906,7 +907,54 @@ function mp4AacDescriptor(bytes, start, end) {
 }
 
 
-if ($response.body && /\/v10\/note\/video\/save(?:\?|$)/.test($request.url) &&
+function directVideoPath(url) {
+  const match = typeof url === "string" && url.match(/^https?:\/\/sns-video-[a-z0-9-]+\.xhscdn\.com(\/stream\/[0-9]+\/[0-9]+\/[0-9]+\/[A-Za-z0-9_-]+\.mp4)(?:\?[^#]*)?$/);
+  return match ? match[1] : null;
+}
+
+async function rewriteDirectVideoSave() {
+  const requestHeaders = Object.fromEntries(Object.entries($request.headers || {}).map(([k,v]) => [k.toLowerCase(), String(v)]));
+  const responseHeaders = Object.fromEntries(Object.entries($response.headers || {}).map(([k,v]) => [k.toLowerCase(), String(v)]));
+  // 基于用户 9.53 版抓包的窄匹配。播放器/预加载 UA、Range 和未知请求一律原样放行。
+  if ($request.method !== "GET" || $response.statusCode !== 200 ||
+      !/^discover\/9\.53 \(iPhone;/.test(requestHeaders["user-agent"] || "") ||
+      "range" in requestHeaders || "if-range" in requestHeaders ||
+      requestHeaders.referer !== "https://app.xhs.cn/" ||
+      !/^video\/mp4(?:;|$)/i.test(responseHeaders["content-type"] || "")) return {};
+  const path = directVideoPath($request.url);
+  if (!path) return {};
+  const cache = JSON.parse($.getdata("redBookVideoFeed") || "null");
+  const matches = Array.isArray(cache) ? cache.filter(item => directVideoPath(item?.url) === path) : [];
+  if (matches.length !== 1 || !matches[0].original_save ||
+      !Number.isFinite(matches[0].original_save.playback_size) ||
+      matches[0].original_save.playback_size <= 0 ||
+      Number(responseHeaders["content-length"]) !== matches[0].original_save.playback_size) return {};
+  console.log("[仅保存原视频 v2] 命中独立保存下载请求");
+  const originalUrl = await resolveOriginalSave(JSON.stringify({ data: { note_id: matches[0].id } }));
+  if (!originalUrl) {
+    console.log("[仅保存原视频 v2] 原视频未就绪，放行原下载");
+    return {};
+  }
+  // response-header 不替换响应体，保留原 Content-Length/Type 等实体字段。
+  // 禁止缓存 307，避免把这次保存的跳转复用于后续播放器请求。
+  const headers = {};
+  const replaced = new Set(["location", "cache-control", "pragma", "expires", "etag", "last-modified"]);
+  for (const [key, value] of Object.entries($response.headers || {})) {
+    if (!replaced.has(key.toLowerCase())) headers[key] = value;
+  }
+  headers.Location = originalUrl;
+  headers["Cache-Control"] = "no-store, private, max-age=0";
+  headers.Pragma = "no-cache";
+  console.log("[仅保存原视频 v2] 独立下载已返回 307 原视频跳转；播放请求未改动");
+  return { status: "HTTP/1.1 307 Temporary Redirect", headers };
+}
+
+if (/^https?:\/\/sns-video-v14\.xhscdn\.com\/stream\//.test($request.url)) {
+  rewriteDirectVideoSave().then(result => $done(result), () => {
+    console.log("[仅保存原视频 v2] 下载探测失败，放行原下载");
+    $done({});
+  });
+} else if ($response.body && /\/v10\/note\/video\/save(?:\?|$)/.test($request.url) &&
     typeof $task !== "undefined" && typeof $task.fetch === "function") {
   resolveOriginalSave($response.body).then(
     originalUrl => rewriteResponse($response.body, originalUrl),
