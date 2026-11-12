@@ -8,7 +8,7 @@
 
 // 小红书视频信息流：从抓包中确认兼容的 MP4 类型里选择画质最高的一份。
 const compatibleStreamTypes = {
-  h265: { codec: "hevc", types: new Set([533, 616, 618]), preference: 1 },
+  h265: { codec: "hevc", types: new Set([86, 533, 616, 618]), preference: 1 },
   h264: { codec: "h264", types: new Set([258]), preference: 0 }
 };
 
