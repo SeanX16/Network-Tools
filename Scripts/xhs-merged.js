@@ -3,7 +3,7 @@
 // 基线 blob：8b3e6927bc6ad6a8efb52e685284c683e09578d0
 // 修复：https://github.com/SeanX16/Network-Tools/blob/main/Scripts/xhs-hd-save.js
 // 修复基线 blob：2d264b506e2aa6ef513c976df46ed5bb21e8d8a0
-// 整合 v4 视频选流、1080P 原视频探测与静态图片原尺寸保存；其余功能沿用原版。
+// 整合 v4 视频选流与静态图片原尺寸保存；其余功能沿用原版。
 
 // 小红书视频信息流：从抓包中确认兼容的 MP4 类型里选择画质最高的一份。
 const compatibleStreamTypes = {
@@ -44,12 +44,10 @@ function chooseCompatibleStream(streams) {
  */
 
 const $ = new Env('小红书');
-
-function rewriteResponse(inputBody) {
 const url = $request.url;
-let rsp_body = inputBody;
+let rsp_body = $response.body;
 if (!rsp_body) {
-  return $done({});
+  $done({});
 }
 let obj = JSON.parse(rsp_body);
 
@@ -488,235 +486,6 @@ if (url.includes("/api/sns/v1/interaction/comment/video/download?")) {
 }
 
 $done({body: JSON.stringify(obj)});
-}
-
-// 原视频补充：仅在当前笔记的兼容流低于源分辨率时检查手机分享页。
-// 只探测 MP4 元数据，不在重写脚本里下载或转码完整视频。
-async function upgradeOriginalVideo(body) {
-  const input = JSON.parse(body);
-  const note = Array.isArray(input.data) ? input.data[0] : null;
-  const media = note?.video_info_v2?.media;
-  const selected = media?.video?.drm_type === 0 && media?.stream
-    ? chooseCompatibleStream(media.stream) : null;
-  if (!selected || !Number.isFinite(selected.stream.duration) || selected.stream.duration <= 0 ||
-      !/^[a-f0-9]{24}$/i.test(note.id || "") ||
-      !(media.video.width * media.video.height > selected.stream.width * selected.stream.height)) return body;
-
-  const deadline = Date.now() + 6500;
-  let active = true;
-  let timer;
-  const fetchBeforeDeadline = async request => {
-    if (!active || Date.now() >= deadline) throw new Error("timeout");
-    const response = await $task.fetch({ ...request, opts: { redirection: false, "auto-cookie": false } });
-    if (!active || Date.now() >= deadline) throw new Error("timeout");
-    return response;
-  };
-  const resolve = async () => {
-    let key = note.video_info_v2.consumer?.origin_video_key || note.video_info_v2.consumer?.originVideoKey;
-    if (!key) {
-      // 只使用这条笔记的官方分享链接；不携带 App 的 Cookie 或认证头。
-      const link = note.share_info?.link;
-      const officialPage = /^https:\/\/www\.(?:xiaohongshu|rednote)\.com\/(?:discovery\/item|explore)\/([a-f0-9]{24})(?:\?[^#]*)?$/i;
-      const match = typeof link === "string" && link.match(officialPage);
-      if (!match || match[1] !== note.id) return null;
-      let page, pageUrl = link;
-      for (let redirects = 0; redirects <= 2; redirects++) {
-        page = await fetchBeforeDeadline({ url: pageUrl, headers: {
-          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
-        }});
-        if (![301, 302, 303, 307, 308].includes(page.statusCode)) break;
-        const location = Object.entries(page.headers || {}).find(([k]) => k.toLowerCase() === "location")?.[1];
-        const target = typeof location === "string" && location.match(officialPage);
-        if (!target || target[1] !== note.id) return null;
-        pageUrl = location;
-      }
-      if (page.statusCode !== 200 || typeof page.body !== "string" || page.body.length > 2000000) return null;
-      const stateText = page.body.match(/window\.__INITIAL_STATE__\s*=\s*([\s\S]*?)<\/script>/);
-      if (!stateText) return null;
-      // JSON 解析，不执行网页脚本。出现无法识别的状态时回退。
-      const state = JSON.parse(stateText[1].trim().replace(/;$/, "").replace(/([:,])undefined(?=[,}\]])/g, "$1null"));
-      const detail = state.noteData?.data?.noteData || state.note?.noteDetailMap?.[note.id]?.note;
-      if ((detail?.noteId || detail?.id) !== note.id) return null;
-      key = detail.video?.consumer?.originVideoKey;
-    }
-    if (typeof key !== "string" || !/^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]{16,}$/.test(key)) return null;
-    const originalUrl = "https://sns-video-bd.xhscdn.com/" + key;
-    const info = await probeOriginalMp4(originalUrl, fetchBeforeDeadline);
-    if (!info || info.width * info.height <= selected.stream.width * selected.stream.height ||
-        Math.min(info.width, info.height) !== 1080 || Math.max(info.width, info.height) > 1920 ||
-        Math.abs(info.duration - selected.stream.duration) > 1500) return null;
-    return { info, originalUrl };
-  };
-  try {
-    const found = await Promise.race([
-      resolve(),
-      new Promise(resolve => { timer = setTimeout(() => resolve(null), 6500); })
-    ]);
-    active = false;
-    if (typeof clearTimeout === "function") clearTimeout(timer);
-    if (!found) {
-      console.log("[小红书原视频] 未找到可用的更高清原视频，保留兼容流");
-      return body;
-    }
-    const { info, originalUrl } = found;
-    const codecKey = info.codec === "hevc" ? "h265" : "h264";
-    // stream_type 是 App 的流描述；沿用已验证的标准 HEVC/H.264 播放类型。
-    // 用实测容器数据重建字段，避免遗留低清流的地址、长度和编码标志。
-    const stream = {
-      stream_type: info.codec === "hevc" ? 86 : 258,
-      stream_desc: "ORIGINAL_" + Math.min(info.width, info.height) + "P",
-      video_codec: info.codec, audio_codec: "aac", format: "mp4",
-      master_url: originalUrl, backup_urls: [], width: info.width, height: info.height,
-      size: info.size, duration: info.duration, video_duration: info.duration,
-      audio_duration: info.audioDuration, audio_channels: info.audioChannels,
-      avg_bitrate: Math.round(info.size * 8000 / info.duration),
-      video_bitrate: Math.round(info.size * 8000 / info.duration),
-      fps: info.fps, default_stream: 1, quality_type: "FHD", hdr_type: 0, rotate: 0,
-      opaque1: { encode_stream: 0, use_pcdn: 0 }
-    };
-    if (!Array.isArray(media.stream[codecKey])) media.stream[codecKey] = [];
-    media.stream[codecKey].push(stream);
-    console.log(`[小红书原视频] 已验证 ${info.width}×${info.height} ${info.codec}；${info.size} 字节`);
-    return JSON.stringify(input);
-  } catch (_) {
-    active = false;
-    if (typeof clearTimeout === "function") clearTimeout(timer);
-    console.log("[小红书原视频] 获取或格式检查失败，保留兼容流");
-    return body;
-  }
-}
-
-async function probeOriginalMp4(url, fetchRange) {
-  const read = async (start, end) => {
-    const response = await fetchRange({ url, headers: {
-      Range: `bytes=${start}-${end}`, "Accept-Encoding": "identity", "User-Agent": "Mozilla/5.0"
-    }});
-    const headers = Object.fromEntries(Object.entries(response.headers || {}).map(([k, v]) => [k.toLowerCase(), String(v)]));
-    const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(headers["content-range"] || "");
-    if (response.statusCode !== 206 || !range || +range[1] !== start || +range[2] > end ||
-        +range[2] < start || +range[3] <= +range[2]) throw new Error("range");
-    const bytes = new Uint8Array(response.bodyBytes);
-    if (bytes.length !== +range[2] - start + 1 || bytes.length > 262144) throw new Error("length");
-    return { bytes, total: +range[3] };
-  };
-  const first = await read(0, 65535);
-  const bytes = first.bytes;
-  let offset = 0;
-  for (let count = 0; count < 32 && offset < first.total; count++) {
-    if (offset + 8 > bytes.length) {
-      const tail = await read(offset, Math.min(offset + 262143, first.total - 1));
-      if (tail.total !== first.total || mp4Text(tail.bytes, 4, 4) !== "moov") return null;
-      const size = mp4U32(tail.bytes, 0);
-      if (size < 8 || size > tail.bytes.length) return null;
-      return parseOriginalMoov(tail.bytes.slice(0, size), first.total);
-    }
-    const size = mp4U32(bytes, offset);
-    const kind = mp4Text(bytes, offset + 4, 4);
-    if (size < 8 || offset + size > first.total) return null;
-    if (offset === 0 && kind !== "ftyp") return null;
-    if (kind === "moov") {
-      if (size > 262144) return null;
-      if (offset + size <= bytes.length) return parseOriginalMoov(bytes.slice(offset, offset + size), first.total);
-      const metadata = await read(offset, offset + size - 1);
-      if (metadata.total !== first.total) return null;
-      return parseOriginalMoov(metadata.bytes, first.total);
-    }
-    offset += size;
-  }
-  return null;
-}
-
-function mp4U32(bytes, at) {
-  if (at < 0 || at + 4 > bytes.length) throw new Error("truncated");
-  return bytes[at] * 16777216 + bytes[at + 1] * 65536 + bytes[at + 2] * 256 + bytes[at + 3];
-}
-function mp4U16(bytes, at) { return (mp4U32(bytes, at) >>> 16); }
-function mp4Text(bytes, at, size) { return String.fromCharCode(...bytes.slice(at, at + size)); }
-function mp4Boxes(bytes, start, end) {
-  const boxes = [];
-  for (let at = start; at < end;) {
-    const size = mp4U32(bytes, at);
-    if (size < 8 || at + size > end) throw new Error("box");
-    boxes.push({ kind: mp4Text(bytes, at + 4, 4), start: at + 8, end: at + size });
-    at += size;
-  }
-  return boxes;
-}
-function parseOriginalMoov(bytes, size) {
-  // 保守接受未旋转、8-bit SDR、单视频 + 单 AAC 音频的普通 MP4。
-  const children = box => mp4Boxes(bytes, box.start, box.end);
-  const one = (box, kind) => {
-    const matches = children(box).filter(b => b.kind === kind);
-    if (matches.length !== 1) throw new Error(kind);
-    return matches[0];
-  };
-  const moov = mp4Boxes(bytes, 0, bytes.length)[0];
-  if (moov?.kind !== "moov" || moov.end !== bytes.length) return null;
-  if (children(moov).some(b => b.kind === "mvex")) return null;
-  const tracks = [];
-  for (const trak of children(moov).filter(b => b.kind === "trak")) {
-    const mdia = one(trak, "mdia"), hdlr = one(mdia, "hdlr"), mdhd = one(mdia, "mdhd");
-    const handler = mp4Text(bytes, hdlr.start + 8, 4);
-    if (!["vide", "soun"].includes(handler) || bytes[mdhd.start] !== 0) return null;
-    const timescale = mp4U32(bytes, mdhd.start + 12);
-    const duration = mp4U32(bytes, mdhd.start + 16) * 1000 / timescale;
-    if (!(duration > 0 && duration < 3600000)) return null;
-    const stbl = one(one(mdia, "minf"), "stbl"), stsd = one(stbl, "stsd");
-    if (mp4U32(bytes, stsd.start + 4) !== 1) return null;
-    const sample = mp4Boxes(bytes, stsd.start + 8, stsd.end)[0];
-    if (handler === "vide") {
-      if (!["hvc1", "avc1"].includes(sample.kind)) return null;
-      const tkhd = one(trak, "tkhd");
-      if (bytes[tkhd.start] !== 0) return null;
-      const matrix = [65536, 0, 0, 0, 65536, 0, 0, 0, 1073741824];
-      if (matrix.some((v, i) => mp4U32(bytes, tkhd.start + 40 + i * 4) !== v)) return null;
-      const config = mp4Boxes(bytes, sample.start + 78, sample.end);
-      if (config.some(b => b.kind === "sinf" || b.kind === "dvcC" || b.kind === "dvvC")) return null;
-      const codec = sample.kind === "hvc1" ? "hevc" : "h264";
-      const codecConfig = config.find(b => b.kind === (codec === "hevc" ? "hvcC" : "avcC"));
-      if (!codecConfig || bytes[codecConfig.start] !== 1) return null;
-      if (codec === "hevc" && ((bytes[codecConfig.start + 1] & 31) !== 1 ||
-          (bytes[codecConfig.start + 17] & 7) !== 0 || (bytes[codecConfig.start + 18] & 7) !== 0)) return null;
-      if (codec === "h264" && ![66, 77, 100].includes(bytes[codecConfig.start + 1])) return null;
-      const stsz = one(stbl, "stsz");
-      tracks.push({ handler, codec, duration, width: mp4U16(bytes, sample.start + 24),
-        height: mp4U16(bytes, sample.start + 26), fps: mp4U32(bytes, stsz.start + 8) * 1000 / duration });
-    } else {
-      if (sample.kind !== "mp4a" || mp4U16(bytes, sample.start + 8) !== 0) return null;
-      const config = mp4Boxes(bytes, sample.start + 28, sample.end);
-      const esds = config.find(b => b.kind === "esds");
-      if (!esds || config.some(b => b.kind === "sinf") || !mp4AacDescriptor(bytes, esds.start + 4, esds.end)) return null;
-      tracks.push({ handler, duration, channels: mp4U16(bytes, sample.start + 16) });
-    }
-  }
-  const video = tracks.filter(t => t.handler === "vide"), audio = tracks.filter(t => t.handler === "soun");
-  if (video.length !== 1 || audio.length !== 1 || ![1, 2].includes(audio[0].channels) ||
-      Math.abs(video[0].duration - audio[0].duration) > 1500) return null;
-  return { ...video[0], duration: Math.round(video[0].duration), size,
-    audioDuration: Math.round(audio[0].duration), audioChannels: audio[0].channels };
-}
-function mp4AacDescriptor(bytes, start, end) {
-  const descriptor = at => {
-    const tag = bytes[at++];
-    let size = 0, count = 0, value;
-    do {
-      if (at >= end || count++ === 4) throw new Error("descriptor");
-      value = bytes[at++]; size = size * 128 + (value & 127);
-    } while (value & 128);
-    if (at + size > end) throw new Error("descriptor size");
-    return { tag, start: at, end: at + size };
-  };
-  const es = descriptor(start);
-  if (es.tag !== 3 || es.start + 3 > es.end) return false;
-  const flags = bytes[es.start + 2];
-  let at = es.start + 3;
-  if (flags & 128) at += 2;
-  if (flags & 64) at += 1 + bytes[at];
-  if (flags & 32) at += 2;
-  const decoder = descriptor(at);
-  return decoder.tag === 4 && decoder.end <= es.end && decoder.start + 13 <= decoder.end &&
-    bytes[decoder.start] === 64 && (bytes[decoder.start + 1] >>> 2) === 5;
-}
 
 // 静态图片默认请求平台原尺寸资源，不强制转换格式或设置固定尺寸。
 function imageEnhance(jsonStr) {
@@ -895,12 +664,3 @@ function extractLivePhotos(pictures, livePhotos, commentId, prefix = "") {
 }
 
 function Env(t, e) { class s { constructor(t) { this.env = t } send(t, e = "GET") { t = "string" == typeof t ? { url: t } : t; let s = this.get; return "POST" === e && (s = this.post), new Promise((e, i) => { s.call(this, t, (t, s, r) => { t ? i(t) : e(s) }) }) } get(t) { return this.send.call(this.env, t) } post(t) { return this.send.call(this.env, t, "POST") } } return new class { constructor(t, e) { this.name = t, this.http = new s(this), this.data = null, this.dataFile = "box.dat", this.logs = [], this.isMute = !1, this.isNeedRewrite = !1, this.logSeparator = "\n", this.encoding = "utf-8", this.startTime = (new Date).getTime(), Object.assign(this, e), this.log("", `\ud83d\udd14${this.name}, \u5f00\u59cb!`) } isNode() { return "undefined" != typeof module && !!module.exports } isQuanX() { return "undefined" != typeof $task } isSurge() { return "undefined" != typeof $httpClient && "undefined" == typeof $loon } isLoon() { return "undefined" != typeof $loon } isShadowrocket() { return "undefined" != typeof $rocket } isStash() { return "undefined" != typeof $environment && $environment["stash-version"] } toObj(t, e = null) { try { return JSON.parse(t) } catch { return e } } toStr(t, e = null) { try { return JSON.stringify(t) } catch { return e } } getjson(t, e) { let s = e; const i = this.getdata(t); if (i) try { s = JSON.parse(this.getdata(t)) } catch { } return s } setjson(t, e) { try { return this.setdata(JSON.stringify(t), e) } catch { return !1 } } getScript(t) { return new Promise(e => { this.get({ url: t }, (t, s, i) => e(i)) }) } runScript(t, e) { return new Promise(s => { let i = this.getdata("@chavy_boxjs_userCfgs.httpapi"); i = i ? i.replace(/\n/g, "").trim() : i; let r = this.getdata("@chavy_boxjs_userCfgs.httpapi_timeout"); r = r ? 1 * r : 20, r = e && e.timeout ? e.timeout : r; const [o, a] = i.split("@"), n = { url: `http://${a}/v1/scripting/evaluate`, body: { script_text: t, mock_type: "cron", timeout: r }, headers: { "X-Key": o, Accept: "*/*" } }; this.post(n, (t, e, i) => s(i)) }).catch(t => this.logErr(t)) } loaddata() { if (!this.isNode()) return {}; { this.fs = this.fs ? this.fs : require("fs"), this.path = this.path ? this.path : require("path"); const t = this.path.resolve(this.dataFile), e = this.path.resolve(process.cwd(), this.dataFile), s = this.fs.existsSync(t), i = !s && this.fs.existsSync(e); if (!s && !i) return {}; { const i = s ? t : e; try { return JSON.parse(this.fs.readFileSync(i)) } catch (t) { return {} } } } } writedata() { if (this.isNode()) { this.fs = this.fs ? this.fs : require("fs"), this.path = this.path ? this.path : require("path"); const t = this.path.resolve(this.dataFile), e = this.path.resolve(process.cwd(), this.dataFile), s = this.fs.existsSync(t), i = !s && this.fs.existsSync(e), r = JSON.stringify(this.data); s ? this.fs.writeFileSync(t, r) : i ? this.fs.writeFileSync(e, r) : this.fs.writeFileSync(t, r) } } lodash_get(t, e, s) { const i = e.replace(/\[(\d+)\]/g, ".$1").split("."); let r = t; for (const t of i) if (r = Object(r)[t], void 0 === r) return s; return r } lodash_set(t, e, s) { return Object(t) !== t ? t : (Array.isArray(e) || (e = e.toString().match(/[^.[\]]+/g) || []), e.slice(0, -1).reduce((t, s, i) => Object(t[s]) === t[s] ? t[s] : t[s] = Math.abs(e[i + 1]) >> 0 == +e[i + 1] ? [] : {}, t)[e[e.length - 1]] = s, t) } getdata(t) { let e = this.getval(t); if (/^@/.test(t)) { const [, s, i] = /^@(.*?)\.(.*?)$/.exec(t), r = s ? this.getval(s) : ""; if (r) try { const t = JSON.parse(r); e = t ? this.lodash_get(t, i, "") : e } catch (t) { e = "" } } return e } setdata(t, e) { let s = !1; if (/^@/.test(e)) { const [, i, r] = /^@(.*?)\.(.*?)$/.exec(e), o = this.getval(i), a = i ? "null" === o ? null : o || "{}" : "{}"; try { const e = JSON.parse(a); this.lodash_set(e, r, t), s = this.setval(JSON.stringify(e), i) } catch (e) { const o = {}; this.lodash_set(o, r, t), s = this.setval(JSON.stringify(o), i) } } else s = this.setval(t, e); return s } getval(t) { return this.isSurge() || this.isLoon() ? $persistentStore.read(t) : this.isQuanX() ? $prefs.valueForKey(t) : this.isNode() ? (this.data = this.loaddata(), this.data[t]) : this.data && this.data[t] || null } setval(t, e) { return this.isSurge() || this.isLoon() ? $persistentStore.write(t, e) : this.isQuanX() ? $prefs.setValueForKey(t, e) : this.isNode() ? (this.data = this.loaddata(), this.data[e] = t, this.writedata(), !0) : this.data && this.data[e] || null } initGotEnv(t) { this.got = this.got ? this.got : require("got"), this.cktough = this.cktough ? this.cktough : require("tough-cookie"), this.ckjar = this.ckjar ? this.ckjar : new this.cktough.CookieJar, t && (t.headers = t.headers ? t.headers : {}, void 0 === t.headers.Cookie && void 0 === t.cookieJar && (t.cookieJar = this.ckjar)) } get(t, e = (() => { })) { if (t.headers && (delete t.headers["Content-Type"], delete t.headers["Content-Length"]), this.isSurge() || this.isLoon()) this.isSurge() && this.isNeedRewrite && (t.headers = t.headers || {}, Object.assign(t.headers, { "X-Surge-Skip-Scripting": !1 })), $httpClient.get(t, (t, s, i) => { !t && s && (s.body = i, s.statusCode = s.status ? s.status : s.statusCode, s.status = s.statusCode), e(t, s, i) }); else if (this.isQuanX()) this.isNeedRewrite && (t.opts = t.opts || {}, Object.assign(t.opts, { hints: !1 })), $task.fetch(t).then(t => { const { statusCode: s, statusCode: i, headers: r, body: o } = t; e(null, { status: s, statusCode: i, headers: r, body: o }, o) }, t => e(t && t.error || "UndefinedError")); else if (this.isNode()) { let s = require("iconv-lite"); this.initGotEnv(t), this.got(t).on("redirect", (t, e) => { try { if (t.headers["set-cookie"]) { const s = t.headers["set-cookie"].map(this.cktough.Cookie.parse).toString(); s && this.ckjar.setCookieSync(s, null), e.cookieJar = this.ckjar } } catch (t) { this.logErr(t) } }).then(t => { const { statusCode: i, statusCode: r, headers: o, rawBody: a } = t, n = s.decode(a, this.encoding); e(null, { status: i, statusCode: r, headers: o, rawBody: a, body: n }, n) }, t => { const { message: i, response: r } = t; e(i, r, r && s.decode(r.rawBody, this.encoding)) }) } } post(t, e = (() => { })) { const s = t.method ? t.method.toLocaleLowerCase() : "post"; if (t.body && t.headers && !t.headers["Content-Type"] && (t.headers["Content-Type"] = "application/x-www-form-urlencoded"), t.headers && delete t.headers["Content-Length"], this.isSurge() || this.isLoon()) this.isSurge() && this.isNeedRewrite && (t.headers = t.headers || {}, Object.assign(t.headers, { "X-Surge-Skip-Scripting": !1 })), $httpClient[s](t, (t, s, i) => { !t && s && (s.body = i, s.statusCode = s.status ? s.status : s.statusCode, s.status = s.statusCode), e(t, s, i) }); else if (this.isQuanX()) t.method = s, this.isNeedRewrite && (t.opts = t.opts || {}, Object.assign(t.opts, { hints: !1 })), $task.fetch(t).then(t => { const { statusCode: s, statusCode: i, headers: r, body: o } = t; e(null, { status: s, statusCode: i, headers: r, body: o }, o) }, t => e(t && t.error || "UndefinedError")); else if (this.isNode()) { let i = require("iconv-lite"); this.initGotEnv(t); const { url: r, ...o } = t; this.got[s](r, o).then(t => { const { statusCode: s, statusCode: r, headers: o, rawBody: a } = t, n = i.decode(a, this.encoding); e(null, { status: s, statusCode: r, headers: o, rawBody: a, body: n }, n) }, t => { const { message: s, response: r } = t; e(s, r, r && i.decode(r.rawBody, this.encoding)) }) } } time(t, e = null) { const s = e ? new Date(e) : new Date; let i = { "M+": s.getMonth() + 1, "d+": s.getDate(), "H+": s.getHours(), "m+": s.getMinutes(), "s+": s.getSeconds(), "q+": Math.floor((s.getMonth() + 3) / 3), S: s.getMilliseconds() }; /(y+)/.test(t) && (t = t.replace(RegExp.$1, (s.getFullYear() + "").substr(4 - RegExp.$1.length))); for (let e in i) new RegExp("(" + e + ")").test(t) && (t = t.replace(RegExp.$1, 1 == RegExp.$1.length ? i[e] : ("00" + i[e]).substr(("" + i[e]).length))); return t } msg(e = t, s = "", i = "", r) { const o = t => { if (!t) return t; if ("string" == typeof t) return this.isLoon() ? t : this.isQuanX() ? { "open-url": t } : this.isSurge() ? { url: t } : void 0; if ("object" == typeof t) { if (this.isLoon()) { let e = t.openUrl || t.url || t["open-url"], s = t.mediaUrl || t["media-url"]; return { openUrl: e, mediaUrl: s } } if (this.isQuanX()) { let e = t["open-url"] || t.url || t.openUrl, s = t["media-url"] || t.mediaUrl, i = t["update-pasteboard"] || t.updatePasteboard; return { "open-url": e, "media-url": s, "update-pasteboard": i } } if (this.isSurge()) { let e = t.url || t.openUrl || t["open-url"]; return { url: e } } } }; if (this.isMute || (this.isSurge() || this.isLoon() ? $notification.post(e, s, i, o(r)) : this.isQuanX() && $notify(e, s, i, o(r))), !this.isMuteLog) { let t = ["", "==============\ud83d\udce3\u7cfb\u7edf\u901a\u77e5\ud83d\udce3=============="]; t.push(e), s && t.push(s), i && t.push(i), console.log(t.join("\n")), this.logs = this.logs.concat(t) } } log(...t) { t.length > 0 && (this.logs = [...this.logs, ...t]), console.log(t.join(this.logSeparator)) } logErr(t, e) { const s = !this.isSurge() && !this.isQuanX() && !this.isLoon(); s ? this.log("", `\u2757\ufe0f${this.name}, \u9519\u8bef!`, t.stack) : this.log("", `\u2757\ufe0f${this.name}, \u9519\u8bef!`, t) } wait(t) { return new Promise(e => setTimeout(e, t)) } done(t = {}) { const e = (new Date).getTime(), s = (e - this.startTime) / 1e3; this.log("", `\ud83d\udd14${this.name}, \u7ed3\u675f! \ud83d\udd5b ${s} \u79d2`), this.log(), this.isSurge() || this.isQuanX() || this.isLoon() ? $done(t) : this.isNode() && process.exit(1) } }(t, e) }
-
-
-// 非视频路由和不支持网络探测的环境仍同步执行原有改写。
-if ($response.body && /\/v4\/note\/videofeed(?:\?|$)/.test($request.url) &&
-    typeof $task !== "undefined" && typeof $task.fetch === "function") {
-  upgradeOriginalVideo($response.body).then(rewriteResponse, () => rewriteResponse($response.body));
-} else {
-  rewriteResponse($response.body);
-}
