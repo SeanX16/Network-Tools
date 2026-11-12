@@ -3,7 +3,7 @@
 // 基线 blob：8b3e6927bc6ad6a8efb52e685284c683e09578d0
 // 修复：https://github.com/SeanX16/Network-Tools/blob/main/Scripts/xhs-hd-save.js
 // 修复基线 blob：2d264b506e2aa6ef513c976df46ed5bb21e8d8a0
-// 仅保存原视频测试 v4：播放保持回退版，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
+// 仅保存原视频测试 v5：播放保持回退版，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
 
 // 小红书视频信息流：从抓包中确认兼容的 MP4 类型里选择画质最高的一份。
 const compatibleStreamTypes = {
@@ -307,12 +307,12 @@ if (url.includes("/v10/note/video/save")) {
       }
     }
   }
-  console.log("[仅保存原视频 v4] 收到 v10 保存响应");
+  console.log("[仅保存原视频 v5] 收到 v10 保存响应");
   if (originalDownloadUrl && obj.data) {
     obj.data.download_url = originalDownloadUrl;
-    console.log("[仅保存原视频 v4] 已替换保存地址；播放流未改动");
+    console.log("[仅保存原视频 v5] 已替换保存地址；播放流未改动");
   } else {
-    console.log("[仅保存原视频 v4] 使用兼容流或服务器保存地址");
+    console.log("[仅保存原视频 v5] 使用兼容流或服务器保存地址");
   }
   // 解除下载限制
   if (obj.data?.disable) {
@@ -710,9 +710,9 @@ async function resolveOriginalSave(body) {
   let active = true;
   let timer;
   const fetchBeforeDeadline = async request => {
-    if (!active || Date.now() >= deadline) throw new Error("timeout");
+    if (!active || Date.now() >= deadline) throw new Error("mp4:probe-timeout");
     const response = await $task.fetch({ ...request, opts: { redirection: false, "auto-cookie": false } });
-    if (!active || Date.now() >= deadline) throw new Error("timeout");
+    if (!active || Date.now() >= deadline) throw new Error("mp4:probe-timeout");
     return response;
   };
   const resolve = async () => {
@@ -754,175 +754,250 @@ async function resolveOriginalSave(body) {
   try {
     const found = await Promise.race([
       resolve(),
-      new Promise(resolve => { timer = setTimeout(() => resolve(null), 6500); })
+      new Promise((resolve, reject) => { timer = setTimeout(() => reject(new Error("mp4:probe-timeout")), 6500); })
     ]);
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     if (!found) {
-      console.log("[仅保存原视频 v4] 未找到可用的更高清原视频，使用原保存逻辑");
+      console.log("[仅保存原视频 v5] 未找到可用的更高清原视频，使用原保存逻辑");
       return null;
     }
     const { info, originalUrl } = found;
-    console.log(`[仅保存原视频 v4] 找到 ${info.width}×${info.height} ${info.codec}，${info.size} 字节`);
+    console.log(`[仅保存原视频 v5] 找到 ${info.width}×${info.height} ${info.codec}，${info.size} 字节`);
     return originalUrl;
-  } catch (_) {
+  } catch (error) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
-    console.log("[仅保存原视频 v4] 获取或格式检查失败，使用原保存逻辑");
+    const reason = /^mp4:[a-z0-9-]+$/.test(error?.message || "") ? error.message.slice(4) : "network-or-page";
+    console.log(`[仅保存原视频 v5] 原视频检查回退：${reason}；使用原保存逻辑`);
     return null;
   }
 }
 
+// 有界 MP4/MOV 元数据解析；只供保存探测使用，不转换媒体、不更改播放流。
+// 未知非关键 box 按声明长度跳过；关键字段始终限制在所属 box 内。
 async function probeOriginalMp4(url, fetchRange) {
+  let total, requests = 0, received = 0;
   const read = async (start, end) => {
+    if (++requests > 8) mp4Fail("probe-request-limit");
     const response = await fetchRange({ url, headers: {
       Range: `bytes=${start}-${end}`, "Accept-Encoding": "identity", "User-Agent": "Mozilla/5.0"
     }});
     const headers = Object.fromEntries(Object.entries(response.headers || {}).map(([k, v]) => [k.toLowerCase(), String(v)]));
     const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(headers["content-range"] || "");
-    if (response.statusCode !== 206 || !range || +range[1] !== start || +range[2] > end ||
-        +range[2] < start || +range[3] <= +range[2]) throw new Error("range");
+    if (response.statusCode !== 206 || !range || !range.slice(1).every(n => Number.isSafeInteger(+n)) ||
+        +range[1] !== start || +range[2] > end || +range[2] < start || +range[3] <= +range[2]) mp4Fail("range-response");
+    if (total !== undefined && total !== +range[3]) mp4Fail("file-size-changed");
+    total = +range[3];
     const bytes = new Uint8Array(response.bodyBytes);
-    if (bytes.length !== +range[2] - start + 1 || bytes.length > 1048576) throw new Error("length");
-    return { bytes, total: +range[3] };
+    received += bytes.length;
+    if (bytes.length !== +range[2] - start + 1 || bytes.length > 1048576 || received > 1146880) mp4Fail("probe-byte-limit");
+    return bytes;
   };
-  const first = await read(0, 65535);
-  const bytes = first.bytes;
-  let offset = 0;
-  for (let count = 0; count < 32 && offset < first.total; count++) {
-    if (offset + 8 > bytes.length) {
-      const tail = await read(offset, Math.min(offset + 1048575, first.total - 1));
-      if (tail.total !== first.total || mp4Text(tail.bytes, 4, 4) !== "moov") return null;
-      const size = mp4U32(tail.bytes, 0);
-      if (size < 8 || size > tail.bytes.length) return null;
-      return parseOriginalMoov(tail.bytes.slice(0, size), first.total);
+  let window = await read(0, 65535), windowStart = 0, offset = 0;
+  for (let count = 0; count < 64 && offset < total; count++) {
+    const required = Math.min(16, total - offset);
+    if (offset < windowStart || offset + required > windowStart + window.length) {
+      window = await read(offset, total - offset <= 1048576 ? total - 1 : offset + 4095);
+      windowStart = offset;
     }
-    const size = mp4U32(bytes, offset);
-    const kind = mp4Text(bytes, offset + 4, 4);
-    if (size < 8 || offset + size > first.total) return null;
-    if (offset === 0 && kind !== "ftyp") return null;
-    if (kind === "moov") {
-      if (size > 1048576) return null;
-      if (offset + size <= bytes.length) return parseOriginalMoov(bytes.slice(offset, offset + size), first.total);
-      const metadata = await read(offset, offset + size - 1);
-      if (metadata.total !== first.total) return null;
-      return parseOriginalMoov(metadata.bytes, first.total);
+    const box = mp4BoxHeader(window, offset - windowStart, total - windowStart, true);
+    if (offset === 0 && !["ftyp", "moov", "mdat", "free", "skip", "wide", "uuid"].includes(box.kind)) mp4Fail("container-signature");
+    if (box.kind === "moof") mp4Fail("fragmented-mp4");
+    if (box.kind === "moov") {
+      if (box.size > 1048576) mp4Fail("metadata-size-limit");
+      const bytes = box.end <= window.length ? window.slice(box.offset, box.end) : await read(offset, offset + box.size - 1);
+      if (bytes.length !== box.size) mp4Fail("truncated-metadata");
+      return parseOriginalMoov(bytes, total);
     }
-    offset += size;
+    offset = windowStart + box.end;
   }
-  return null;
+  mp4Fail("movie-metadata-not-found");
 }
 
-function mp4U32(bytes, at) {
-  if (at < 0 || at + 4 > bytes.length) throw new Error("truncated");
+function mp4Fail(code) { throw new Error("mp4:" + code); }
+function mp4Need(bytes, at, length, end = bytes.length) {
+  if (!Number.isSafeInteger(at) || !Number.isSafeInteger(length) || at < 0 || length < 0 || at + length > end || end > bytes.length) mp4Fail("truncated-field");
+}
+function mp4U32(bytes, at, end = bytes.length) {
+  mp4Need(bytes, at, 4, end);
   return bytes[at] * 16777216 + bytes[at + 1] * 65536 + bytes[at + 2] * 256 + bytes[at + 3];
 }
-function mp4U16(bytes, at) { return (mp4U32(bytes, at) >>> 16); }
-function mp4Text(bytes, at, size) { return String.fromCharCode(...bytes.slice(at, at + size)); }
-function mp4Boxes(bytes, start, end, allowVisualPadding = false) {
-  if (start < 0 || end > bytes.length || start > end) throw new Error("box bounds");
+function mp4U16(bytes, at, end = bytes.length) {
+  mp4Need(bytes, at, 2, end); return bytes[at] * 256 + bytes[at + 1];
+}
+function mp4U64(bytes, at, end = bytes.length) {
+  const value = mp4U32(bytes, at, end) * 4294967296 + mp4U32(bytes, at + 4, end);
+  if (!Number.isSafeInteger(value)) mp4Fail("unsafe-64-bit-value");
+  return value;
+}
+function mp4Text(bytes, at, length, end = bytes.length) {
+  mp4Need(bytes, at, length, end);
+  return String.fromCharCode(...bytes.slice(at, at + length));
+}
+function mp4BoxHeader(bytes, at, parentEnd, topLevel = false) {
+  // parentEnd 可大于当前网络窗口；这里仅读取头，随后验证逻辑文件边界。
+  mp4Need(bytes, at, 8);
+  let size = mp4U32(bytes, at), header = 8;
+  const kind = mp4Text(bytes, at + 4, 4);
+  if (size === 1) { size = mp4U64(bytes, at + 8); header = 16; }
+  else if (size === 0) {
+    if (!topLevel) mp4Fail("nested-zero-size");
+    size = parentEnd - at;
+  }
+  if (size < header || !Number.isSafeInteger(at + size) || at + size > parentEnd) mp4Fail("box-boundary");
+  return { kind, offset: at, start: at + header, end: at + size, size };
+}
+function mp4Boxes(bytes, start, end, allowVisualPadding = false, topLevel = false) {
+  mp4Need(bytes, start, end - start);
   const boxes = [];
   for (let at = start; at < end;) {
-    // 本次 QuickTime hvc1 样本在扩展区末尾有一个全零 32-bit 字段。
-    // 仅允许视觉样本扩展区中的这四字节；不把任意截断 box 当作填充。
+    // 部分 QuickTime 视觉样本的末尾有四字节全零填充，仅在此位置接受。
     if (allowVisualPadding && end - at === 4 && mp4U32(bytes, at) === 0) break;
-    if (end - at < 8) throw new Error("box header");
-    const size = mp4U32(bytes, at);
-    if (size < 8 || at + size > end) throw new Error("box");
-    boxes.push({ kind: mp4Text(bytes, at + 4, 4), start: at + 8, end: at + size });
-    at += size;
+    if (boxes.length >= 4096 || end - at < 8) mp4Fail("box-count-or-header");
+    const box = mp4BoxHeader(bytes, at, end, topLevel);
+    boxes.push(box); at = box.end;
   }
   return boxes;
 }
-function parseOriginalMoov(bytes, size) {
-  // 保守接受未旋转、8-bit SDR、单视频 + 单 AAC 音频的普通 MP4。
-  const children = box => mp4Boxes(bytes, box.start, box.end);
-  const one = (box, kind) => {
-    const matches = children(box).filter(b => b.kind === kind);
-    if (matches.length !== 1) throw new Error(kind);
-    return matches[0];
-  };
-  const moov = mp4Boxes(bytes, 0, bytes.length)[0];
-  if (moov?.kind !== "moov" || moov.end !== bytes.length) return null;
-  if (children(moov).some(b => b.kind === "mvex")) return null;
-  const tracks = [];
-  for (const trak of children(moov).filter(b => b.kind === "trak")) {
-    const mdia = one(trak, "mdia"), hdlr = one(mdia, "hdlr"), mdhd = one(mdia, "mdhd");
-    const handler = mp4Text(bytes, hdlr.start + 8, 4);
-    if (!["vide", "soun"].includes(handler) || bytes[mdhd.start] !== 0) return null;
-    const timescale = mp4U32(bytes, mdhd.start + 12);
-    const duration = mp4U32(bytes, mdhd.start + 16) * 1000 / timescale;
-    if (!(duration > 0 && duration < 3600000)) return null;
-    const stbl = one(one(mdia, "minf"), "stbl"), stsd = one(stbl, "stsd");
-    if (mp4U32(bytes, stsd.start + 4) !== 1) return null;
-    const sample = mp4Boxes(bytes, stsd.start + 8, stsd.end)[0];
-    if (handler === "vide") {
-      if (!["hvc1", "avc1"].includes(sample.kind)) return null;
-      const tkhd = one(trak, "tkhd");
-      if (bytes[tkhd.start] !== 0) return null;
-      const matrix = [65536, 0, 0, 0, 65536, 0, 0, 0, 1073741824];
-      if (matrix.some((v, i) => mp4U32(bytes, tkhd.start + 40 + i * 4) !== v)) return null;
-      const config = mp4Boxes(bytes, sample.start + 78, sample.end, true);
-      if (config.some(b => b.kind === "sinf" || b.kind === "dvcC" || b.kind === "dvvC")) return null;
-      const codec = sample.kind === "hvc1" ? "hevc" : "h264";
-      const codecConfig = config.find(b => b.kind === (codec === "hevc" ? "hvcC" : "avcC"));
-      if (!codecConfig || bytes[codecConfig.start] !== 1) return null;
-      if (codec === "hevc" && ((bytes[codecConfig.start + 1] & 31) !== 1 ||
-          (bytes[codecConfig.start + 17] & 7) !== 0 || (bytes[codecConfig.start + 18] & 7) !== 0)) return null;
-      if (codec === "h264" && ![66, 77, 100].includes(bytes[codecConfig.start + 1])) return null;
-      const stsz = one(stbl, "stsz");
-      tracks.push({ handler, codec, duration, width: mp4U16(bytes, sample.start + 24),
-        height: mp4U16(bytes, sample.start + 26), fps: mp4U32(bytes, stsz.start + 8) * 1000 / duration });
-    } else {
-      if (sample.kind !== "mp4a" || sample.end - sample.start < 28) return null;
-      const version = mp4U16(bytes, sample.start + 8);
-      if (![0, 1].includes(version)) return null;
-      // QuickTime v1 增加四个 32-bit 字段，AAC esds 可以位于 wave 内。
-      const config = mp4Boxes(bytes, sample.start + (version === 1 ? 44 : 28), sample.end);
-      if (config.some(b => b.kind === "sinf")) return null;
-      const descriptors = config.filter(b => b.kind === "esds");
-      const waves = config.filter(b => b.kind === "wave");
-      if (waves.length > 1) return null;
-      if (waves.length) {
-        const nested = children(waves[0]);
-        const formats = nested.filter(b => b.kind === "frma");
-        if (nested.some(b => b.kind === "sinf" || b.kind === "wave") || formats.length !== 1 ||
-            formats[0].end - formats[0].start !== 4 || mp4Text(bytes, formats[0].start, 4) !== "mp4a") return null;
-        descriptors.push(...nested.filter(b => b.kind === "esds"));
-      }
-      if (descriptors.length !== 1) return null;
-      const esds = descriptors[0];
-      if (esds.end - esds.start < 4 || mp4U32(bytes, esds.start) !== 0 ||
-          !mp4AacDescriptor(bytes, esds.start + 4, esds.end)) return null;
-      tracks.push({ handler, duration, channels: mp4U16(bytes, sample.start + 16) });
+function mp4One(boxes, kind, required = true) {
+  const found = boxes.filter(b => b.kind === kind);
+  if (found.length > 1 || (required && found.length !== 1)) mp4Fail("missing-or-duplicate-" + kind);
+  return found[0];
+}
+function mp4Duration(bytes, mdhd) {
+  mp4Need(bytes, mdhd.start, 4, mdhd.end);
+  const version = bytes[mdhd.start];
+  if (version !== 0 && version !== 1) mp4Fail("media-header-version");
+  const scaleAt = mdhd.start + (version === 1 ? 20 : 12);
+  const scale = mp4U32(bytes, scaleAt, mdhd.end);
+  const ticks = version === 1 ? mp4U64(bytes, scaleAt + 4, mdhd.end) : mp4U32(bytes, scaleAt + 4, mdhd.end);
+  const duration = ticks / scale * 1000;
+  if (!(scale > 0 && duration > 0 && duration < 3600000)) mp4Fail("media-duration");
+  return duration;
+}
+function mp4Rotation(bytes, tkhd) {
+  mp4Need(bytes, tkhd.start, 4, tkhd.end);
+  const version = bytes[tkhd.start];
+  if (version !== 0 && version !== 1) mp4Fail("track-header-version");
+  const at = tkhd.start + (version === 1 ? 52 : 40);
+  const m = Array.from({ length: 9 }, (_, i) => mp4U32(bytes, at + i * 4, tkhd.end) | 0);
+  if (m[2] !== 0 || m[5] !== 0 || m[8] !== 1073741824) mp4Fail("video-transform");
+  const rotations = [[65536, 0, 0, 65536], [0, 65536, -65536, 0], [-65536, 0, 0, -65536], [0, -65536, 65536, 0]];
+  const index = rotations.findIndex(r => r.every((v, i) => v === [m[0], m[1], m[3], m[4]][i]));
+  if (index < 0) mp4Fail("video-transform");
+  return index * 90; // 保留文件中的旋转和平移，不改写媒体；仅换算显示尺寸。
+}
+function mp4VideoSample(bytes, sample) {
+  if (!["hvc1", "avc1"].includes(sample.kind)) mp4Fail("video-sample-type");
+  mp4Need(bytes, sample.start, 78, sample.end);
+  const config = mp4Boxes(bytes, sample.start + 78, sample.end, true);
+  if (config.some(b => ["sinf", "dvcC", "dvvC", "mdcv", "clli"].includes(b.kind))) mp4Fail("encrypted-or-hdr-video");
+  for (const color of config.filter(b => b.kind === "colr")) {
+    const type = mp4Text(bytes, color.start, 4, color.end);
+    if (["nclc", "nclx"].includes(type)) {
+      const transfer = mp4U16(bytes, color.start + 6, color.end);
+      if ([16, 18].includes(transfer)) mp4Fail("hdr-transfer");
     }
   }
-  const video = tracks.filter(t => t.handler === "vide"), audio = tracks.filter(t => t.handler === "soun");
-  if (video.length !== 1 || audio.length !== 1 || ![1, 2].includes(audio[0].channels) ||
-      Math.abs(video[0].duration - audio[0].duration) > 1500) return null;
-  return { ...video[0], duration: Math.round(video[0].duration), size,
-    audioDuration: Math.round(audio[0].duration), audioChannels: audio[0].channels };
+  const codec = sample.kind === "hvc1" ? "hevc" : "h264";
+  const c = mp4One(config, codec === "hevc" ? "hvcC" : "avcC");
+  mp4Need(bytes, c.start, codec === "hevc" ? 23 : 7, c.end);
+  if (bytes[c.start] !== 1) mp4Fail("codec-config-version");
+  if (codec === "hevc" && ((bytes[c.start + 1] & 31) !== 1 || (bytes[c.start + 16] & 3) !== 1 ||
+      (bytes[c.start + 17] & 7) !== 0 || (bytes[c.start + 18] & 7) !== 0)) mp4Fail("hevc-profile-or-depth");
+  if (codec === "h264" && ![66, 77, 100].includes(bytes[c.start + 1])) mp4Fail("h264-profile");
+  const width = mp4U16(bytes, sample.start + 24, sample.end), height = mp4U16(bytes, sample.start + 26, sample.end);
+  if (!width || !height) mp4Fail("video-dimensions");
+  return { codec, width, height };
+}
+function mp4AudioSample(bytes, sample) {
+  if (sample.kind !== "mp4a") mp4Fail("audio-sample-type");
+  mp4Need(bytes, sample.start, 28, sample.end);
+  const version = mp4U16(bytes, sample.start + 8, sample.end);
+  let extension = sample.start + 28, channels = mp4U16(bytes, sample.start + 16, sample.end);
+  if (version === 1) extension += 16;
+  else if (version === 2) {
+    mp4Need(bytes, sample.start, 64, sample.end);
+    extension = sample.offset + mp4U32(bytes, sample.start + 28, sample.end);
+    channels = mp4U32(bytes, sample.start + 40, sample.end);
+    if (extension < sample.start + 64) mp4Fail("audio-v2-size");
+  } else if (version !== 0) mp4Fail("audio-description-version");
+  if (![1, 2].includes(channels)) mp4Fail("audio-channels");
+  const config = mp4Boxes(bytes, extension, sample.end);
+  if (config.some(b => b.kind === "sinf")) mp4Fail("encrypted-audio");
+  const descriptors = config.filter(b => b.kind === "esds");
+  const wave = mp4One(config, "wave", false);
+  if (wave) {
+    const nested = mp4Boxes(bytes, wave.start, wave.end);
+    if (nested.some(b => ["sinf", "wave"].includes(b.kind))) mp4Fail("audio-wave-structure");
+    const format = mp4One(nested, "frma", false);
+    if (format && (format.end - format.start !== 4 || mp4Text(bytes, format.start, 4, format.end) !== "mp4a")) mp4Fail("audio-wave-format");
+    descriptors.push(...nested.filter(b => b.kind === "esds"));
+  }
+  const esds = mp4One(descriptors, "esds");
+  if (mp4U32(bytes, esds.start, esds.end) !== 0 || !mp4AacDescriptor(bytes, esds.start + 4, esds.end)) mp4Fail("aac-descriptor");
+  return { channels };
+}
+function parseOriginalMoov(bytes, size) {
+  if (bytes.length > 1048576) mp4Fail("metadata-size-limit");
+  const roots = mp4Boxes(bytes, 0, bytes.length, false, true), moov = mp4One(roots, "moov");
+  if (roots.length !== 1) mp4Fail("movie-metadata-root");
+  const children = box => mp4Boxes(bytes, box.start, box.end);
+  const movie = children(moov);
+  if (movie.some(b => ["mvex", "cmov"].includes(b.kind))) mp4Fail("fragmented-or-compressed-movie");
+  const traks = movie.filter(b => b.kind === "trak");
+  if (!traks.length || traks.length > 32) mp4Fail("track-count");
+  const videos = [], audios = [];
+  for (const trak of traks) {
+    const track = children(trak), mdia = mp4One(track, "mdia"), media = children(mdia);
+    const hdlr = mp4One(media, "hdlr"), handler = mp4Text(bytes, hdlr.start + 8, 4, hdlr.end);
+    // 时间码、字幕及元数据轨不参与音视频兼容判断，不要求它们采用 AAC/H.264。
+    if (!["vide", "soun"].includes(handler)) continue;
+    const duration = mp4Duration(bytes, mp4One(media, "mdhd"));
+    const stbl = mp4One(children(mp4One(media, "minf")), "stbl");
+    const stsd = mp4One(children(stbl), "stsd");
+    if (mp4U32(bytes, stsd.start, stsd.end) !== 0) mp4Fail("sample-description-version");
+    const count = mp4U32(bytes, stsd.start + 4, stsd.end);
+    const samples = mp4Boxes(bytes, stsd.start + 8, stsd.end);
+    if (!count || count > 16 || samples.length !== count) mp4Fail("sample-description-count");
+    const descriptions = samples.map(s => handler === "vide" ? mp4VideoSample(bytes, s) : mp4AudioSample(bytes, s));
+    if (descriptions.some(d => JSON.stringify(d) !== JSON.stringify(descriptions[0]))) mp4Fail("changing-sample-format");
+    if (handler === "vide") {
+      const rotation = mp4Rotation(bytes, mp4One(track, "tkhd"));
+      const { codec, width, height } = descriptions[0];
+      videos.push({ codec, width: rotation % 180 ? height : width, height: rotation % 180 ? width : height, duration, rotation });
+    } else audios.push({ ...descriptions[0], duration });
+  }
+  if (videos.length !== 1 || audios.length > 8) mp4Fail("audio-video-track-count");
+  // 无音轨的视频正常；多个 AAC 音轨逐一检查。声音短于画面也不是封装错误。
+  return { ...videos[0], duration: Math.round(videos[0].duration), size,
+    audioDuration: audios.length ? Math.round(Math.max(...audios.map(a => a.duration))) : 0,
+    audioChannels: audios[0]?.channels || 0, audioTracks: audios.length };
 }
 function mp4AacDescriptor(bytes, start, end) {
-  const descriptor = at => {
+  const descriptor = (at, limit) => {
+    mp4Need(bytes, at, 2, limit);
     const tag = bytes[at++];
     let size = 0, count = 0, value;
     do {
-      if (at >= end || count++ === 4) throw new Error("descriptor");
+      mp4Need(bytes, at, 1, limit);
+      if (++count > 4) mp4Fail("descriptor-length");
       value = bytes[at++]; size = size * 128 + (value & 127);
     } while (value & 128);
-    if (at + size > end) throw new Error("descriptor size");
+    mp4Need(bytes, at, size, limit);
     return { tag, start: at, end: at + size };
   };
-  const es = descriptor(start);
-  if (es.tag !== 3 || es.start + 3 > es.end) return false;
+  const es = descriptor(start, end);
+  if (es.tag !== 3) return false;
+  mp4Need(bytes, es.start, 3, es.end);
   const flags = bytes[es.start + 2];
   let at = es.start + 3;
   if (flags & 128) at += 2;
-  if (flags & 64) at += 1 + bytes[at];
+  if (flags & 64) { mp4Need(bytes, at, 1, es.end); at += 1 + bytes[at]; }
   if (flags & 32) at += 2;
-  const decoder = descriptor(at);
-  return decoder.tag === 4 && decoder.end <= es.end && decoder.start + 13 <= decoder.end &&
+  const decoder = descriptor(at, es.end);
+  return decoder.tag === 4 && decoder.start + 13 <= decoder.end &&
     bytes[decoder.start] === 64 && (bytes[decoder.start + 1] >>> 2) === 5;
 }
 
@@ -948,10 +1023,10 @@ async function rewriteDirectVideoSave() {
       !Number.isFinite(matches[0].original_save.playback_size) ||
       matches[0].original_save.playback_size <= 0 ||
       Number(responseHeaders["content-length"]) !== matches[0].original_save.playback_size) return {};
-  console.log("[仅保存原视频 v4] 命中独立保存下载请求");
+  console.log("[仅保存原视频 v5] 命中独立保存下载请求");
   const originalUrl = await resolveOriginalSave(JSON.stringify({ data: { note_id: matches[0].id } }));
   if (!originalUrl) {
-    console.log("[仅保存原视频 v4] 原视频未就绪，放行原下载");
+    console.log("[仅保存原视频 v5] 原视频未就绪，放行原下载");
     return {};
   }
   // response-header 不替换响应体，保留原 Content-Length/Type 等实体字段。
@@ -964,13 +1039,13 @@ async function rewriteDirectVideoSave() {
   headers.Location = originalUrl;
   headers["Cache-Control"] = "no-store, private, max-age=0";
   headers.Pragma = "no-cache";
-  console.log("[仅保存原视频 v4] 独立下载已返回 307 原视频跳转；播放请求未改动");
+  console.log("[仅保存原视频 v5] 独立下载已返回 307 原视频跳转；播放请求未改动");
   return { status: "HTTP/1.1 307 Temporary Redirect", headers };
 }
 
 if (directVideoPath($request.url)) {
   rewriteDirectVideoSave().then(result => $done(result), () => {
-    console.log("[仅保存原视频 v4] 下载探测失败，放行原下载");
+    console.log("[仅保存原视频 v5] 下载探测失败，放行原下载");
     $done({});
   });
 } else if ($response.body && /\/v10\/note\/video\/save(?:\?|$)/.test($request.url) &&
