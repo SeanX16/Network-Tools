@@ -3,7 +3,7 @@
 // 基线 blob：8b3e6927bc6ad6a8efb52e685284c683e09578d0
 // 修复：https://github.com/SeanX16/Network-Tools/blob/main/Scripts/xhs-hd-save.js
 // 修复基线 blob：2d264b506e2aa6ef513c976df46ed5bb21e8d8a0
-// 正式整合版 v8：播放交给 APP 原生选流，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
+// 正式整合版 v8.1：播放交给 APP 原生选流，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
 
 // 仅保存兜底：从已验证兼容的流中选一份，不删除或修改 APP 播放候选。
 const compatibleStreamTypes = {
@@ -287,12 +287,12 @@ if (url.includes("/v10/note/video/save")) {
       }
     }
   }
-  console.log("[原视频保存 v8] 收到 v10 保存响应");
+  console.log("[原视频保存 v8.1] 收到 v10 保存响应");
   if (originalDownloadUrl && obj.data) {
     obj.data.download_url = originalDownloadUrl;
-    console.log("[原视频保存 v8] 已替换保存地址；播放流未改动");
+    console.log("[原视频保存 v8.1] 已替换保存地址；播放流未改动");
   } else {
-    console.log("[原视频保存 v8] 使用兼容流或服务器保存地址");
+    console.log("[原视频保存 v8.1] 使用兼容流或服务器保存地址");
   }
   // 解除下载限制
   if (obj.data?.disable) {
@@ -805,7 +805,7 @@ async function resolveOriginalSave(body, matchedCandidate) {
     const originalUrl = "https://sns-video-bd.xhscdn.com/" + key;
     const info = await probeOriginalMp4(originalUrl, fetchBeforeDeadline);
     if (!info || info.width * info.height < source.width * source.height ||
-        Math.min(info.width, info.height) < 1080 || Math.min(info.width, info.height) > 2160 || Math.max(info.width, info.height) > 4096 ||
+        Math.min(info.width, info.height) > 2160 || Math.max(info.width, info.height) > 4096 ||
         Math.abs(info.duration - source.duration) > 1500) return null;
     return { info, originalUrl };
   };
@@ -817,17 +817,17 @@ async function resolveOriginalSave(body, matchedCandidate) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     if (!found) {
-      console.log("[原视频保存 v8] 未找到符合条件的原视频，使用原保存逻辑");
+      console.log("[原视频保存 v8.1] 未找到符合条件的原视频，使用原保存逻辑");
       return null;
     }
     const { info, originalUrl } = found;
-    console.log(`[原视频保存 v8] 找到 ${info.width}×${info.height} ${info.codec}，${info.bitDepth}-bit ${info.dynamicRange}，${info.size} 字节`);
+    console.log(`[原视频保存 v8.1] 找到 ${info.width}×${info.height} ${info.codec}，${info.bitDepth}-bit ${info.dynamicRange}，${info.size} 字节`);
     return originalUrl;
   } catch (error) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     const reason = /^mp4:[a-z0-9-]+$/.test(error?.message || "") ? error.message.slice(4) : "network-or-page";
-    console.log(`[原视频保存 v8] 原视频检查回退：${reason}；使用原保存逻辑`);
+    console.log(`[原视频保存 v8.1] 原视频检查回退：${reason}；使用原保存逻辑`);
     return null;
   }
 }
@@ -1111,7 +1111,7 @@ async function rewriteDirectVideoSave() {
   const cache = JSON.parse($.getdata("redBookVideoFeed") || "null");
   const match = findSaveMatch(cache, path, Number(responseHeaders["content-length"]));
   if (!match) return {};
-  console.log("[原视频保存 v8] 命中独立保存下载请求");
+  console.log("[原视频保存 v8.1] 命中独立保存下载请求");
   const originalUrl = await resolveOriginalSave(JSON.stringify({ data: { note_id: match.entry.id } }), match.candidate);
   let target = originalUrl;
   if (!target) {
@@ -1121,7 +1121,7 @@ async function rewriteDirectVideoSave() {
     if (match.entry.save_cache_version === 8 && fallbackPath !== path &&
         fallback?.entry.id === match.entry.id) target = match.entry.url;
     if (!target) {
-      console.log("[原视频保存 v8] 原视频未就绪，放行原下载");
+      console.log("[原视频保存 v8.1] 原视频未就绪，放行原下载");
       return {};
     }
   }
@@ -1135,14 +1135,14 @@ async function rewriteDirectVideoSave() {
   headers.Location = target;
   headers["Cache-Control"] = "no-store, private, max-age=0";
   headers.Pragma = "no-cache";
-  console.log(originalUrl ? "[原视频保存 v8] 独立下载已返回 307 原视频跳转；播放请求未改动" :
-    "[原视频保存 v8] 原文件不可用，独立下载已返回 307 兼容流兜底；播放请求未改动");
+  console.log(originalUrl ? "[原视频保存 v8.1] 独立下载已返回 307 原视频跳转；播放请求未改动" :
+    "[原视频保存 v8.1] 原文件不可用，独立下载已返回 307 兼容流兜底；播放请求未改动");
   return { status: "HTTP/1.1 307 Temporary Redirect", headers };
 }
 
 if (directVideoPath($request.url)) {
   rewriteDirectVideoSave().then(result => $done(result), () => {
-    console.log("[原视频保存 v8] 下载探测失败，放行原下载");
+    console.log("[原视频保存 v8.1] 下载探测失败，放行原下载");
     $done({});
   });
 } else if ($response.body && /\/v10\/note\/video\/save(?:\?|$)/.test($request.url) &&
