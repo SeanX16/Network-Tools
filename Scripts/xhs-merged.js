@@ -3,7 +3,7 @@
 // 基线 blob：8b3e6927bc6ad6a8efb52e685284c683e09578d0
 // 修复：https://github.com/SeanX16/Network-Tools/blob/main/Scripts/xhs-hd-save.js
 // 修复基线 blob：2d264b506e2aa6ef513c976df46ed5bb21e8d8a0
-// 正式整合版 v8.1：播放交给 APP 原生选流，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
+// 正式整合版 v8.2：播放交给 APP 原生选流，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
 
 // 仅保存兜底：从已验证兼容的流中选一份，不删除或修改 APP 播放候选。
 const compatibleStreamTypes = {
@@ -287,12 +287,12 @@ if (url.includes("/v10/note/video/save")) {
       }
     }
   }
-  console.log("[原视频保存 v8.1] 收到 v10 保存响应");
+  console.log("[原视频保存 v8.2] 收到 v10 保存响应");
   if (originalDownloadUrl && obj.data) {
     obj.data.download_url = originalDownloadUrl;
-    console.log("[原视频保存 v8.1] 已替换保存地址；播放流未改动");
+    console.log("[原视频保存 v8.2] 已替换保存地址；播放流未改动");
   } else {
-    console.log("[原视频保存 v8.1] 使用兼容流或服务器保存地址");
+    console.log("[原视频保存 v8.2] 使用兼容流或服务器保存地址");
   }
   // 解除下载限制
   if (obj.data?.disable) {
@@ -349,137 +349,84 @@ if (url.includes("/v6/homefeed")) {
   }
 }
 
-// 加载评论区
-if (url.includes("/api/sns/v5/note/comment/list?") || url.includes("/api/sns/v3/note/comment/sub_comments?")) {
-  replaceRedIdWithFmz200(obj.data);
-  let livePhotos = [];
-  let commentVideos = [];
-  let note_id = "";
-  if (obj.data?.comments?.length > 0) {
-    note_id = obj.data.comments[0].note_id;
-    for (const comment of obj.data.comments) {
-      // comment_type: 0-文字，2-图片/live，3-表情包，5-视频
-      fixCommentType(comment);
-      extractLivePhotos(comment.pictures, livePhotos, comment.id);
-
-      // 子评论处理
-      if (comment.sub_comments?.length > 0) {
-        for (const sub_comment of comment.sub_comments) {
-          fixCommentType(sub_comment);
-          extractLivePhotos(sub_comment.pictures, livePhotos, comment.id, "_sub");
-        }
-      }
-
-      // 评论视频处理 
-      if (comment?.videos?.length > 0) {
-        for (const video of comment.videos) {
-          if (video?.video_id && video?.video_info) {
-            try {
-              const videoObj = JSON.parse(video.video_info);
-              // 选择最佳画质
-              const streams = selectBestStream(videoObj?.stream?.h265, videoObj?.stream?.h264);
-              if (streams?.master_url) {
-                commentVideos.push({
-                  videId: video.video_id,
-                  videoUrl: streams.master_url,
-                  commentId: comment.id,
-                  noteId: note_id,
-                  width: streams.width,
-                  height: streams.height,
-                  bitrate: streams.video_bitrate,
-                  hdr: streams.hdr_type === 1
-                });
-              }
-            } catch (e) {
-              console.log("评论视频处理出错", e);
-            }
-          }
-        }
-      }
-      
-    }
-  }
-  console.log("本次note_id：" + note_id);
-  // 存储评论实况照片
-  if (livePhotos.length > 0) {
-    let commitsRsp;
-    const commitsCache = $.getdata("fmz200.xiaohongshu.comments.rsp");
-    console.log("读取缓存val：" + commitsCache);
-    if (!commitsCache) {
-      commitsRsp = {noteId: note_id, livePhotos: livePhotos};
-    } else {
-      commitsRsp = JSON.parse(commitsCache);
-      console.log("缓存note_id：" + commitsRsp.noteId);
-      if (commitsRsp.noteId === note_id) {
-        console.log("增量数据");
-        commitsRsp.livePhotos = deduplicateLivePhotos(commitsRsp.livePhotos.concat(livePhotos));
-      } else {
-        console.log("更换数据");
-        commitsRsp = {noteId: note_id, livePhotos: livePhotos};
-      }
-    }
-    console.log("写入缓存val：" + JSON.stringify(commitsRsp));
-    $.setdata(JSON.stringify(commitsRsp), "fmz200.xiaohongshu.comments.rsp");
-  }
-
-  // 存储评论视频信息
-  if (commentVideos.length > 0) {
-    let videosCache;
-    const commitsCache = $.getdata("fmz200.xiaohongshu.comments.videos.rsp");
-    if (!commitsCache) {
-      videosCache = {noteId: note_id, videos: commentVideos};
-    } else {
-      videosCache = JSON.parse(commitsCache);
-      console.log("[commentVideos]缓存note_id：" + videosCache.noteId);
-      if (videosCache.noteId === note_id) {
-        console.log("[commentVideos]增量数据");
-        videosCache.videos = deduplicateLivePhotos(videosCache.videos.concat(commentVideos));
-      } else {
-        console.log("[commentVideos]更换数据");
-        videosCache = {noteId: note_id, videos: commentVideos};
-      }
-    }
-    console.log("[commentVideos]写入缓存val：" + JSON.stringify(videosCache));
-    $.setdata(JSON.stringify(videosCache), "fmz200.xiaohongshu.comments.videos.rsp");
-  }
-}
-
-// 下载评论区live图/评论区视频
-if (url.includes("/api/sns/v1/interaction/comment/video/download?")) {
-  const commitsCache = $.getdata("fmz200.xiaohongshu.comments.rsp");
-  const commitsVideoCache = $.getdata("fmz200.xiaohongshu.comments.videos.rsp");
-  console.log("读取缓存val：" + commitsCache);
-  console.log("目标video_id：" + obj.data.video.video_id);
-  if (commitsCache) {
-    let commitsRsp = JSON.parse(commitsCache);
-    if (commitsRsp.livePhotos.length > 0 && obj.data?.video) {
-      for (const item of commitsRsp.livePhotos) {
-        // console.log("缓存video_id：" + item.videId);
-        if (item.videId === obj.data.video.video_id) {
-          console.log("匹配到无水印链接：" + item.videoUrl);
-          obj.data.video.video_url = item.videoUrl;
-          break;
-        }
-      }
-    }
-  } else if (commitsVideoCache){
-    let commitsVideoRsp = JSON.parse(commitsVideoCache);
-    if (commitsVideoRsp.videos.length > 0 && obj.data?.video) {
-      for (const item of commitsVideoRsp.videos) {
-        // console.log("缓存video_id：" + item.videId);
-        if (item.videId === obj.data.video.video_id) {
-          console.log("[commentVideos]匹配到无水印链接：" + item.videoUrl);
-          obj.data.video.video_url = item.videoUrl;
-          break;
-        }
-      }
-    }
-  } else {
-    console.log(`没有[${obj.data?.video.video_id}]的无水印地址`);
-  }
-}
+rewriteCommentMedia(obj, url);
 
 $done({body: JSON.stringify(obj)});
+}
+
+// 评论保存独立入口：只缓存候选，列表中的播放地址和媒体参数保持原样。
+function rewriteCommentMedia(obj, url) {
+  const query = key => {
+    const match = new RegExp("[?&]" + key + "=([^&]*)").exec(url);
+    try { return match ? decodeURIComponent(match[1]) : ""; } catch (_) { return ""; }
+  };
+  const readCache = key => {
+    try {
+      const value = JSON.parse($.getdata(key));
+      return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+    } catch (_) { return null; }
+  };
+  const validUrl = value => typeof value === "string" && /^https?:\/\/(?:sns-video-[a-z0-9-]+\.xhscdn\.com|sns-v[0-9]+\.(?:xhscdn|rednotecdn)\.com)\//i.test(value);
+  const liveKey = "fmz200.xiaohongshu.comments.rsp", videoKey = "fmz200.xiaohongshu.comments.videos.rsp";
+  if (/\/api\/sns\/(?:v5\/note\/comment\/list|v3\/note\/comment\/sub_comments)(?:\?|$)/.test(url)) {
+    replaceRedIdWithFmz200(obj.data);
+    const comments = Array.isArray(obj.data?.comments) ? obj.data.comments : [];
+    const noteId = query("note_id") || comments.find(c => c && typeof c.note_id === "string")?.note_id;
+    const livePhotos = [], videos = [];
+    const collect = (items, target, note, comment) => {
+      if (!Array.isArray(items)) return;
+      for (const item of items) {
+        // 64-bit video_id 只接受无损字符串；不将已失真的 JS number 转回来。
+        if (!item || typeof item.video_id !== "string" || !/^\d+$/.test(item.video_id)) continue;
+        try {
+          const info = typeof item.video_info === "string" ? JSON.parse(item.video_info) : item.video_info;
+          const best = selectBestStream(info?.stream?.h265, info?.stream?.h264);
+          if (!validUrl(best?.master_url)) continue;
+          const entry = { videId: item.video_id, videoUrl: best.master_url };
+          if (target === videos) Object.assign(entry, { commentId: comment.id, noteId: note,
+            width: best.width, height: best.height, bitrate: best.video_bitrate, hdr: best.hdr_type === 1 });
+          target.push(entry);
+        } catch (_) { /* 单个候选损坏时跳过，仍返回其余评论。 */ }
+      }
+    };
+    for (const comment of comments) {
+      if (!comment || typeof comment !== "object") continue;
+      for (const item of [comment, ...(Array.isArray(comment.sub_comments) ? comment.sub_comments : [])]) {
+        if (!item || typeof item !== "object") continue;
+        fixCommentType(item);
+        collect(item.pictures, livePhotos, noteId, item);
+        collect(item.videos, videos, noteId, item);
+      }
+    }
+    for (const [key, field, incoming] of [[liveKey, "livePhotos", livePhotos], [videoKey, "videos", videos]]) {
+      if (!noteId || !incoming.length) continue;
+      const cached = readCache(key);
+      const previous = cached?.noteId === noteId && Array.isArray(cached[field]) ? cached[field] : [];
+      const merged = new Map();
+      for (const item of [...previous, ...incoming]) {
+        if (typeof item?.videId === "string" && validUrl(item.videoUrl)) merged.set(item.videId, item);
+      }
+      $.setdata(JSON.stringify({ noteId, [field]: [...merged.values()] }), key);
+      console.log(`[评论实况保存 v8.2] 已缓存 ${incoming.length} 个${field === "livePhotos" ? "实况" : "视频"}候选`);
+    }
+  }
+  if (/\/api\/sns\/v1\/interaction\/comment\/video\/download(?:\?|$)/.test(url)) {
+    const video = obj.data?.video, requestedId = query("video_id"), noteId = query("note_id");
+    if (!video || typeof video.video_id !== "string" || (requestedId && requestedId !== video.video_id)) return;
+    const hits = [];
+    for (const [key, field] of [[liveKey, "livePhotos"], [videoKey, "videos"]]) {
+      const cache = readCache(key);
+      if (!cache || (noteId && cache.noteId !== noteId) || !Array.isArray(cache[field])) continue;
+      for (const item of cache[field]) {
+        if (item?.videId === video.video_id && validUrl(item.videoUrl)) hits.push(item.videoUrl);
+      }
+    }
+    const urls = [...new Set(hits)];
+    if (urls.length === 1) {
+      video.video_url = urls[0];
+      console.log("[评论实况保存 v8.2] 已替换匹配的评论下载地址");
+    } else console.log("[评论实况保存 v8.2] 无唯一匹配候选，保留服务器地址");
+  }
 }
 
 // 静态图片默认请求平台原尺寸资源，不强制转换格式或设置固定尺寸。
@@ -817,17 +764,17 @@ async function resolveOriginalSave(body, matchedCandidate) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     if (!found) {
-      console.log("[原视频保存 v8.1] 未找到符合条件的原视频，使用原保存逻辑");
+      console.log("[原视频保存 v8.2] 未找到符合条件的原视频，使用原保存逻辑");
       return null;
     }
     const { info, originalUrl } = found;
-    console.log(`[原视频保存 v8.1] 找到 ${info.width}×${info.height} ${info.codec}，${info.bitDepth}-bit ${info.dynamicRange}，${info.size} 字节`);
+    console.log(`[原视频保存 v8.2] 找到 ${info.width}×${info.height} ${info.codec}，${info.bitDepth}-bit ${info.dynamicRange}，${info.size} 字节`);
     return originalUrl;
   } catch (error) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     const reason = /^mp4:[a-z0-9-]+$/.test(error?.message || "") ? error.message.slice(4) : "network-or-page";
-    console.log(`[原视频保存 v8.1] 原视频检查回退：${reason}；使用原保存逻辑`);
+    console.log(`[原视频保存 v8.2] 原视频检查回退：${reason}；使用原保存逻辑`);
     return null;
   }
 }
@@ -946,6 +893,128 @@ function mp4Rotation(bytes, tkhd) {
   if (index < 0) mp4Fail("video-transform");
   return index * 90; // 保留文件中的旋转和平移，不改写媒体；仅换算显示尺寸。
 }
+
+// 仅提取 hvcC 内 SPS 的 VUI 色彩字段；不读取视频载荷、不解码、不猜测 HDR。
+// HEVC syntax: SPS -> profile_tier_level/scaling_list_data/st_ref_pic_set -> VUI.
+function mp4HevcSpsColor(nal, expectedDepth) {
+  if (nal.length < 4 || nal.length > 65535 || nal[0] !== 66 || nal[1] !== 1) mp4Fail("hevc-sps-header");
+  const rbsp = [];
+  for (let i = 2, zeros = 0; i < nal.length; i++) {
+    const value = nal[i];
+    if (zeros === 2 && value === 3) {
+      if (i + 1 >= nal.length || nal[i + 1] > 3) mp4Fail("hevc-sps-escape");
+      zeros = 0; continue;
+    }
+    if (zeros === 2 && value < 3) mp4Fail("hevc-sps-escape");
+    rbsp.push(value); zeros = value === 0 ? zeros + 1 : 0;
+  }
+  let at = 0;
+  const bits = count => {
+    if (count < 0 || count > 32 || at + count > rbsp.length * 8) mp4Fail("hevc-sps-truncated");
+    let value = 0;
+    for (let i = 0; i < count; i++, at++) value = value * 2 + ((rbsp[at >>> 3] >>> (7 - (at & 7))) & 1);
+    return value;
+  };
+  const skip = count => { while (count > 0) { const n = Math.min(count, 32); bits(n); count -= n; } };
+  const ue = (maximum = 4294967294) => {
+    let zeros = 0;
+    while (!bits(1)) if (++zeros > 31) mp4Fail("hevc-sps-golomb");
+    const value = 2 ** zeros - 1 + bits(zeros);
+    if (value > maximum) mp4Fail("hevc-sps-limit");
+    return value;
+  };
+  const se = () => { const code = ue(65535); return code & 1 ? (code + 1) / 2 : -code / 2; };
+  skip(4); // sps_video_parameter_set_id
+  const subLayers = bits(3), nesting = bits(1);
+  if (subLayers > 6 || (subLayers === 0 && !nesting)) mp4Fail("hevc-sps-layers");
+  skip(96); // general profile_tier_level; hvcC profile/depth are checked separately
+  const subProfiles = [], subLevels = [];
+  for (let i = 0; i < subLayers; i++) { subProfiles.push(bits(1)); subLevels.push(bits(1)); }
+  if (subLayers) for (let i = subLayers; i < 8; i++) if (bits(2)) mp4Fail("hevc-sps-reserved");
+  for (let i = 0; i < subLayers; i++) { if (subProfiles[i]) skip(88); if (subLevels[i]) skip(8); }
+  ue(15); // sps_seq_parameter_set_id
+  if (ue(3) !== 1) mp4Fail("hevc-sps-chroma"); // existing 4:2:0 support boundary
+  const width = ue(65535), height = ue(65535);
+  if (!width || !height) mp4Fail("hevc-sps-dimensions");
+  if (bits(1)) {
+    const left = ue(width), right = ue(width), top = ue(height), bottom = ue(height);
+    if ((left + right) * 2 >= width || (top + bottom) * 2 >= height) mp4Fail("hevc-sps-crop");
+  }
+  if (ue(8) + 8 !== expectedDepth || ue(8) + 8 !== expectedDepth) mp4Fail("hevc-sps-depth");
+  const pocBits = ue(12) + 4;
+  const allOrdering = bits(1);
+  for (let i = allOrdering ? 0 : subLayers; i <= subLayers; i++) {
+    const buffering = ue(15); ue(buffering); ue();
+  }
+  ue(3); ue(3); ue(3); ue(3); ue(5); ue(5); // coding/transform block sizes and hierarchy depths
+  if (bits(1) && bits(1)) { // scaling_list_enabled_flag, sps_scaling_list_data_present_flag
+    for (let size = 0; size < 4; size++) {
+      for (let matrix = 0; matrix < 6; matrix += size === 3 ? 3 : 1) {
+        if (!bits(1)) ue(matrix); // scaling_list_pred_matrix_id_delta
+        else {
+          if (size > 1) se();
+          for (let i = 0, count = Math.min(64, 1 << (4 + 2 * size)); i < count; i++) se();
+        }
+      }
+    }
+  }
+  skip(2); // amp_enabled_flag, sample_adaptive_offset_enabled_flag
+  if (bits(1)) { skip(8); ue(3); ue(3); skip(1); } // pcm_enabled_flag
+  const referenceSets = ue(64), deltaCounts = [];
+  for (let i = 0; i < referenceSets; i++) {
+    let count = 0;
+    if (i && bits(1)) { // inter_ref_pic_set_prediction_flag; SPS always references previous set
+      skip(1); ue(32767);
+      for (let j = 0; j <= deltaCounts[i - 1]; j++) {
+        const used = bits(1), useDelta = used || bits(1);
+        if (useDelta) count++;
+      }
+      if (count > 64) mp4Fail("hevc-sps-reference-count");
+    } else {
+      const negative = ue(64), positive = ue(64);
+      count = negative + positive;
+      if (count > 64) mp4Fail("hevc-sps-reference-count");
+      for (let j = 0; j < count; j++) { ue(32767); skip(1); }
+    }
+    deltaCounts.push(count);
+  }
+  if (bits(1)) for (let i = 0, count = ue(32); i < count; i++) skip(pocBits + 1);
+  skip(2); // sps_temporal_mvp_enabled_flag, strong_intra_smoothing_enabled_flag
+  if (!bits(1)) return null; // vui_parameters_present_flag
+  if (bits(1) && bits(8) === 255) skip(32); // aspect_ratio_info_present_flag / Extended_SAR
+  if (bits(1)) skip(1); // overscan_info_present_flag
+  if (!bits(1)) return null; // video_signal_type_present_flag
+  skip(4); // video_format, video_full_range_flag
+  if (!bits(1)) return null; // colour_description_present_flag
+  return { primaries: bits(8), transfer: bits(8), matrix: bits(8) };
+}
+
+function mp4HevcConfigColor(bytes, config, bitDepth) {
+  const colors = [];
+  let at = config.start + 23, units = 0, spsCount = 0;
+  const arrays = bytes[config.start + 22];
+  for (let i = 0; i < arrays; i++) {
+    mp4Need(bytes, at, 3, config.end);
+    const kind = bytes[at] & 63, count = mp4U16(bytes, at + 1, config.end);
+    at += 3; units += count;
+    if (units > 256) mp4Fail("hevc-config-nal-count");
+    for (let j = 0; j < count; j++) {
+      const length = mp4U16(bytes, at, config.end); at += 2;
+      if (length < 2) mp4Fail("hevc-config-nal-size");
+      mp4Need(bytes, at, length, config.end);
+      if (kind === 33) {
+        if (++spsCount > 16) mp4Fail("hevc-config-sps-count");
+        colors.push(mp4HevcSpsColor(bytes.slice(at, at + length), bitDepth));
+      }
+      at += length;
+    }
+  }
+  if (at !== config.end || !spsCount) mp4Fail("hevc-config-sps-missing-or-trailing");
+  // 多个 SPS 必须提供同一色彩描述；不以其中一个替其他未知/冲突 SPS 猜值。
+  if (colors.some(c => JSON.stringify(c) !== JSON.stringify(colors[0]))) mp4Fail("conflicting-sps-color");
+  return colors[0];
+}
+
 function mp4VideoSample(bytes, sample) {
   if (!["hvc1", "avc1"].includes(sample.kind)) mp4Fail("video-sample-type");
   mp4Need(bytes, sample.start, 78, sample.end);
@@ -958,7 +1027,7 @@ function mp4VideoSample(bytes, sample) {
       transfer: mp4U16(bytes, b.start + 6, b.end), matrix: mp4U16(bytes, b.start + 8, b.end) } : null;
   }).filter(Boolean);
   if (colors.some(c => JSON.stringify(c) !== JSON.stringify(colors[0]))) mp4Fail("conflicting-color-metadata");
-  const color = colors[0];
+  let color = colors[0];
   const codec = sample.kind === "hvc1" ? "hevc" : "h264";
   const c = mp4One(config, codec === "hevc" ? "hvcC" : "avcC");
   mp4Need(bytes, c.start, codec === "hevc" ? 23 : 7, c.end);
@@ -970,6 +1039,9 @@ function mp4VideoSample(bytes, sample) {
     if (![1, 2].includes(profile) || (bytes[c.start + 16] & 3) !== 1 || luma !== chroma ||
         ![8, 10].includes(luma) || (profile === 1 && luma !== 8)) mp4Fail("hevc-profile-or-depth");
     bitDepth = luma;
+    // 保留已有 colr 校验路径；缺少可读 colr 时才解析 hvcC 中的 SPS/VUI。
+    // 不把 Dolby compatibility_id 当作色彩字段，也不为缺少 VUI 的文件编造值。
+    if (!color) color = mp4HevcConfigColor(bytes, c, bitDepth);
   }
   if (codec === "h264" && ![66, 77, 100].includes(bytes[c.start + 1])) mp4Fail("h264-profile");
   let dynamicRange = "SDR-or-unspecified";
@@ -1111,7 +1183,7 @@ async function rewriteDirectVideoSave() {
   const cache = JSON.parse($.getdata("redBookVideoFeed") || "null");
   const match = findSaveMatch(cache, path, Number(responseHeaders["content-length"]));
   if (!match) return {};
-  console.log("[原视频保存 v8.1] 命中独立保存下载请求");
+  console.log("[原视频保存 v8.2] 命中独立保存下载请求");
   const originalUrl = await resolveOriginalSave(JSON.stringify({ data: { note_id: match.entry.id } }), match.candidate);
   let target = originalUrl;
   if (!target) {
@@ -1121,7 +1193,7 @@ async function rewriteDirectVideoSave() {
     if (match.entry.save_cache_version === 8 && fallbackPath !== path &&
         fallback?.entry.id === match.entry.id) target = match.entry.url;
     if (!target) {
-      console.log("[原视频保存 v8.1] 原视频未就绪，放行原下载");
+      console.log("[原视频保存 v8.2] 原视频未就绪，放行原下载");
       return {};
     }
   }
@@ -1135,14 +1207,14 @@ async function rewriteDirectVideoSave() {
   headers.Location = target;
   headers["Cache-Control"] = "no-store, private, max-age=0";
   headers.Pragma = "no-cache";
-  console.log(originalUrl ? "[原视频保存 v8.1] 独立下载已返回 307 原视频跳转；播放请求未改动" :
-    "[原视频保存 v8.1] 原文件不可用，独立下载已返回 307 兼容流兜底；播放请求未改动");
+  console.log(originalUrl ? "[原视频保存 v8.2] 独立下载已返回 307 原视频跳转；播放请求未改动" :
+    "[原视频保存 v8.2] 原文件不可用，独立下载已返回 307 兼容流兜底；播放请求未改动");
   return { status: "HTTP/1.1 307 Temporary Redirect", headers };
 }
 
 if (directVideoPath($request.url)) {
   rewriteDirectVideoSave().then(result => $done(result), () => {
-    console.log("[原视频保存 v8.1] 下载探测失败，放行原下载");
+    console.log("[原视频保存 v8.2] 下载探测失败，放行原下载");
     $done({});
   });
 } else if ($response.body && /\/v10\/note\/video\/save(?:\?|$)/.test($request.url) &&
