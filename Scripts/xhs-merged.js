@@ -3,7 +3,7 @@
 // 基线 blob：8b3e6927bc6ad6a8efb52e685284c683e09578d0
 // 修复：https://github.com/SeanX16/Network-Tools/blob/main/Scripts/xhs-hd-save.js
 // 修复基线 blob：2d264b506e2aa6ef513c976df46ed5bb21e8d8a0
-// 正式整合版 v8.2：播放交给 APP 原生选流，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
+// 正式整合版 v8.3：播放交给 APP 原生选流，保存支持小红书视频 CDN 域名族及最高 4K 原视频。
 
 // 仅保存兜底：从已验证兼容的流中选一份，不删除或修改 APP 播放候选。
 const compatibleStreamTypes = {
@@ -287,12 +287,12 @@ if (url.includes("/v10/note/video/save")) {
       }
     }
   }
-  console.log("[原视频保存 v8.2] 收到 v10 保存响应");
+  console.log("[原视频保存 v8.3] 收到 v10 保存响应");
   if (originalDownloadUrl && obj.data) {
     obj.data.download_url = originalDownloadUrl;
-    console.log("[原视频保存 v8.2] 已替换保存地址；播放流未改动");
+    console.log("[原视频保存 v8.3] 已替换保存地址；播放流未改动");
   } else {
-    console.log("[原视频保存 v8.2] 使用兼容流或服务器保存地址");
+    console.log("[原视频保存 v8.3] 使用兼容流或服务器保存地址");
   }
   // 解除下载限制
   if (obj.data?.disable) {
@@ -349,9 +349,31 @@ if (url.includes("/v6/homefeed")) {
   }
 }
 
+rewritePreloadedImages(obj, url);
 rewriteCommentMedia(obj, url);
 
 $done({body: JSON.stringify(obj)});
+}
+
+// 预加载先于图文详情进入 APP；同步静态图地址，避免旧预览随后仍被用于保存。
+function rewritePreloadedImages(obj, url) {
+  if (!/\/api\/sns\/v1\/note\/detailfeed\/preload(?:\?|$)/.test(url)) return;
+  const map = obj?.data?.preload_map;
+  if (!map || typeof map !== "object" || Array.isArray(map)) return;
+  let changed = 0;
+  for (const note of Object.values(map)) {
+    // 只处理已观察到的图文笔记结构；视频笔记、未知类型和媒体数据原样保留。
+    if (!note || note.type !== "normal" || note.model_type !== "note" || !Array.isArray(note.images_list)) continue;
+    note.images_list = note.images_list.map(image => {
+      if (!image || typeof image !== "object" || Array.isArray(image) || image.live_photo || image.live_photo_file_id ||
+          typeof image.fileid !== "string" || !/^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]{16,}$/.test(image.fileid)) return image;
+      const previous = JSON.stringify(image);
+      const updated = imageEnhance(JSON.stringify([image]))[0];
+      if (JSON.stringify(updated) !== previous) changed++;
+      return updated;
+    });
+  }
+  console.log(`[小红书原图预加载 v8.3] 已处理 ${changed} 张静态图片`);
 }
 
 // 评论保存独立入口：只缓存候选，列表中的播放地址和媒体参数保持原样。
@@ -407,7 +429,7 @@ function rewriteCommentMedia(obj, url) {
         if (typeof item?.videId === "string" && validUrl(item.videoUrl)) merged.set(item.videId, item);
       }
       $.setdata(JSON.stringify({ noteId, [field]: [...merged.values()] }), key);
-      console.log(`[评论实况保存 v8.2] 已缓存 ${incoming.length} 个${field === "livePhotos" ? "实况" : "视频"}候选`);
+      console.log(`[评论实况保存 v8.3] 已缓存 ${incoming.length} 个${field === "livePhotos" ? "实况" : "视频"}候选`);
     }
   }
   if (/\/api\/sns\/v1\/interaction\/comment\/video\/download(?:\?|$)/.test(url)) {
@@ -424,8 +446,8 @@ function rewriteCommentMedia(obj, url) {
     const urls = [...new Set(hits)];
     if (urls.length === 1) {
       video.video_url = urls[0];
-      console.log("[评论实况保存 v8.2] 已替换匹配的评论下载地址");
-    } else console.log("[评论实况保存 v8.2] 无唯一匹配候选，保留服务器地址");
+      console.log("[评论实况保存 v8.3] 已替换匹配的评论下载地址");
+    } else console.log("[评论实况保存 v8.3] 无唯一匹配候选，保留服务器地址");
   }
 }
 
@@ -764,17 +786,17 @@ async function resolveOriginalSave(body, matchedCandidate) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     if (!found) {
-      console.log("[原视频保存 v8.2] 未找到符合条件的原视频，使用原保存逻辑");
+      console.log("[原视频保存 v8.3] 未找到符合条件的原视频，使用原保存逻辑");
       return null;
     }
     const { info, originalUrl } = found;
-    console.log(`[原视频保存 v8.2] 找到 ${info.width}×${info.height} ${info.codec}，${info.bitDepth}-bit ${info.dynamicRange}，${info.size} 字节`);
+    console.log(`[原视频保存 v8.3] 找到 ${info.width}×${info.height} ${info.codec}，${info.bitDepth}-bit ${info.dynamicRange}，${info.size} 字节`);
     return originalUrl;
   } catch (error) {
     active = false;
     if (typeof clearTimeout === "function") clearTimeout(timer);
     const reason = /^mp4:[a-z0-9-]+$/.test(error?.message || "") ? error.message.slice(4) : "network-or-page";
-    console.log(`[原视频保存 v8.2] 原视频检查回退：${reason}；使用原保存逻辑`);
+    console.log(`[原视频保存 v8.3] 原视频检查回退：${reason}；使用原保存逻辑`);
     return null;
   }
 }
@@ -1183,7 +1205,7 @@ async function rewriteDirectVideoSave() {
   const cache = JSON.parse($.getdata("redBookVideoFeed") || "null");
   const match = findSaveMatch(cache, path, Number(responseHeaders["content-length"]));
   if (!match) return {};
-  console.log("[原视频保存 v8.2] 命中独立保存下载请求");
+  console.log("[原视频保存 v8.3] 命中独立保存下载请求");
   const originalUrl = await resolveOriginalSave(JSON.stringify({ data: { note_id: match.entry.id } }), match.candidate);
   let target = originalUrl;
   if (!target) {
@@ -1193,7 +1215,7 @@ async function rewriteDirectVideoSave() {
     if (match.entry.save_cache_version === 8 && fallbackPath !== path &&
         fallback?.entry.id === match.entry.id) target = match.entry.url;
     if (!target) {
-      console.log("[原视频保存 v8.2] 原视频未就绪，放行原下载");
+      console.log("[原视频保存 v8.3] 原视频未就绪，放行原下载");
       return {};
     }
   }
@@ -1207,14 +1229,14 @@ async function rewriteDirectVideoSave() {
   headers.Location = target;
   headers["Cache-Control"] = "no-store, private, max-age=0";
   headers.Pragma = "no-cache";
-  console.log(originalUrl ? "[原视频保存 v8.2] 独立下载已返回 307 原视频跳转；播放请求未改动" :
-    "[原视频保存 v8.2] 原文件不可用，独立下载已返回 307 兼容流兜底；播放请求未改动");
+  console.log(originalUrl ? "[原视频保存 v8.3] 独立下载已返回 307 原视频跳转；播放请求未改动" :
+    "[原视频保存 v8.3] 原文件不可用，独立下载已返回 307 兼容流兜底；播放请求未改动");
   return { status: "HTTP/1.1 307 Temporary Redirect", headers };
 }
 
 if (directVideoPath($request.url)) {
   rewriteDirectVideoSave().then(result => $done(result), () => {
-    console.log("[原视频保存 v8.2] 下载探测失败，放行原下载");
+    console.log("[原视频保存 v8.3] 下载探测失败，放行原下载");
     $done({});
   });
 } else if ($response.body && /\/v10\/note\/video\/save(?:\?|$)/.test($request.url) &&
